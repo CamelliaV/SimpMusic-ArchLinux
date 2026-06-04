@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_home="/opt/simpmusic-patched/SimpMusic"
+app_dir="$app_home/lib/app"
+cfg_file="$app_dir/SimpMusic.cfg"
+vlc_path="$app_dir/vlc"
+
+export SKIKO_RENDER_API="${SKIKO_RENDER_API:-OPENGL}"
+export __GLX_VENDOR_LIBRARY_NAME="${__GLX_VENDOR_LIBRARY_NAME:-nvidia}"
+export __GL_SYNC_TO_VBLANK="${__GL_SYNC_TO_VBLANK:-1}"
+
+if [[ -n "${SIMPMUSIC_JAVA_BIN:-}" ]]; then
+    java_bin="$SIMPMUSIC_JAVA_BIN"
+elif [[ -x /usr/lib/jvm/java-26-openjdk/bin/java ]]; then
+    java_bin="/usr/lib/jvm/java-26-openjdk/bin/java"
+elif [[ -x /usr/lib/jvm/default/bin/java ]]; then
+    java_bin="/usr/lib/jvm/default/bin/java"
+else
+    java_bin="$(command -v java)"
+fi
+
+classpath_entries=()
+while IFS= read -r line; do
+    case "$line" in
+        app.classpath=*)
+            entry="${line#app.classpath=}"
+            classpath_entries+=("${entry//\$APPDIR/$app_dir}")
+            ;;
+    esac
+done < "$cfg_file"
+
+if [[ "${#classpath_entries[@]}" -eq 0 ]]; then
+    while IFS= read -r jar; do
+        classpath_entries+=("$jar")
+    done < <(find "$app_dir" -maxdepth 1 -name '*.jar' -print)
+fi
+
+IFS=:
+classpath="${classpath_entries[*]}"
+unset IFS
+
+# The jpackage native launcher currently segfaults in jvmLauncherStartJvm/setenv
+# on this Arch/KDE/Wayland setup. Start the same packaged app through Java.
+exec "$java_bin" \
+    --add-opens=java.base/java.nio=ALL-UNNAMED \
+    -Dvlc.bundled.path="$vlc_path" \
+    -Dcompose.application.resources.dir="$app_dir/resources" \
+    -Dcompose.application.configure.swing.globals=true \
+    -Dskiko.library.path="$app_dir" \
+    -Dskiko.renderApi=OPENGL \
+    -Dskiko.vsync.enabled=true \
+    -Dskiko.vsync.framelimit.fallback.enabled=true \
+    -Dskiko.rendering.linux.waitForFrameVsyncOnRedrawImmediately=true \
+    -cp "$classpath" \
+    com.maxrave.simpmusic.MainKt \
+    "$@"

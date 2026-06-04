@@ -354,6 +354,8 @@
     <string name="repeat_off">Repeat Off</string>
     <string name="youtube_transcript">YouTube Transcript</string>
     <string name="user_interface">Interface</string>
+    <string name="desktop_ui_scale">Desktop UI scale</string>
+    <string name="desktop_font_family">Desktop font</string>
     <string name="translucent_bottom_navigation_bar">Translucent bottom navigation bar</string>
     <string name="you_can_see_the_content_below_the_bottom_bar">You can see the content below the bottom bar</string>
     <string name="donation">If you love my work, give me a coffee</string>
@@ -559,4 +561,13 @@
     <string name="home_offline_title">Can't connect</string>
     <string name="home_offline_subtitle">Check your internet connection and try again, or listen to your downloaded music.</string>
     <string name="listen_to_downloaded">Listen to downloaded music</string>
+    <string name="desktop_google_login_description">This fork adds a desktop login path: Google blocks embedded WebView login, so it imports the YouTube cookies from your already signed-in desktop browser.</string>
+    <string name="desktop_google_login_import_browser">Fork feature: import YouTube login from browser</string>
+    <string name="desktop_google_login_importing">Importing browser cookies</string>
+    <string name="desktop_google_login_imported_from">Imported from %1$s</string>
+    <string name="desktop_google_login_browser_import_failed">Browser cookie import failed</string>
+    <string name="desktop_google_login_open_browser">Open Google login in browser</string>
+    <string name="desktop_google_login_cookie_placeholder">Paste YouTube Music cookie</string>
+    <string name="desktop_google_login_with_cookie">Log in with cookie</string>
+    <string name="desktop_google_login_compact_input">Use compact cookie input</string>
 </resources>

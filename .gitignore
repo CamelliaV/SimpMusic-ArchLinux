@@ -24,6 +24,8 @@ crowdin.yml
 #dev files
 ign.md
 .docs
+/SIMPMUSIC-DESKTOP-INPUT-FIX.md
+/SIMPMUSIC-WAYLAND-NVIDIA-FIX.md
 # Sentry Config File
 sentry.properties
 /composeApp/build/

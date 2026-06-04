@@ -35,6 +35,7 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -51,30 +52,50 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import androidx.window.core.layout.WindowSizeClass.Companion.WIDTH_DP_MEDIUM_LOWER_BOUND
 import coil3.toUri
 import com.maxrave.domain.data.player.GenericMediaItem
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
+import com.maxrave.domain.manager.DesktopFontFamily
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.expect.Orientation
 import com.maxrave.simpmusic.expect.currentOrientation
 import com.maxrave.simpmusic.expect.openUrl
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
+import com.maxrave.simpmusic.extension.InstallDesktopMouseNavigationHandlers
 import com.maxrave.simpmusic.extension.copy
+import com.maxrave.simpmusic.extension.dismissOnPrimaryClickAway
 import com.maxrave.simpmusic.ui.component.AppBottomNavigationBar
 import com.maxrave.simpmusic.ui.component.AppNavigationRail
 import com.maxrave.simpmusic.ui.component.LiquidGlassAppBottomNavigationBar
+import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.CreditDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.MoodDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.NotificationDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.RecentlySongsDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.SettingsDestination
+import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDestination
+import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.LocalPlaylistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
+import com.maxrave.simpmusic.ui.navigation.destination.login.DiscordLoginDestination
+import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
+import com.maxrave.simpmusic.ui.navigation.destination.login.SpotifyLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestination
+import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.navigation.graph.AppNavigationGraph
 import com.maxrave.simpmusic.ui.screen.MiniPlayer
 import com.maxrave.simpmusic.ui.screen.player.NowPlayingScreen
@@ -130,6 +151,8 @@ fun App(viewModel: SharedViewModel = koinInject()) {
 
     val isTranslucentBottomBar by viewModel.getTranslucentBottomBar().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     val isLiquidGlassEnabled by viewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
+    val dataStoreManager = koinInject<DataStoreManager>()
+    val desktopFontFamily by dataStoreManager.desktopFontFamily.collectAsStateWithLifecycle(DesktopFontFamily.DEFAULT)
     // MiniPlayer visibility logic
     var isShowMiniPlayer by rememberSaveable {
         mutableStateOf(true)
@@ -309,6 +332,8 @@ fun App(viewModel: SharedViewModel = koinInject()) {
         }
     }
 
+    val desktopMouseForwardStack = remember { mutableStateListOf<Any>() }
+    var isDesktopMouseHistoryNavigation by remember { mutableStateOf(false) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(navBackStackEntry) {
         Logger.d("MainActivity", "Current destination: ${navBackStackEntry?.destination?.route}")
@@ -318,6 +343,11 @@ fun App(viewModel: SharedViewModel = koinInject()) {
         isInFullscreen = navBackStackEntry?.destination?.hierarchy?.any {
             it.hasRoute(FullscreenDestination::class)
         } == true
+        if (isDesktopMouseHistoryNavigation) {
+            isDesktopMouseHistoryNavigation = false
+        } else {
+            desktopMouseForwardStack.clear()
+        }
     }
     var isScrolledToTop by rememberSaveable {
         mutableStateOf(false)
@@ -326,8 +356,31 @@ fun App(viewModel: SharedViewModel = koinInject()) {
     val isTabletLandscape = isTablet && currentOrientation() == Orientation.LANDSCAPE
 
     val backdrop = rememberBackdrop()
+    if (getPlatform() == Platform.Desktop) {
+        InstallDesktopMouseNavigationHandlers(
+            onBack = {
+                val currentDestination = navBackStackEntry?.toDesktopMouseNavigationDestination() ?: return@InstallDesktopMouseNavigationHandlers
+                isDesktopMouseHistoryNavigation = true
+                if (navController.navigateUp()) {
+                    desktopMouseForwardStack.add(currentDestination)
+                } else {
+                    isDesktopMouseHistoryNavigation = false
+                }
+            },
+            onForward = {
+                val destination =
+                    if (desktopMouseForwardStack.isNotEmpty()) {
+                        desktopMouseForwardStack.removeAt(desktopMouseForwardStack.lastIndex)
+                    } else {
+                        return@InstallDesktopMouseNavigationHandlers
+                    }
+                isDesktopMouseHistoryNavigation = true
+                navController.navigate(destination)
+            },
+        )
+    }
 
-    AppTheme {
+    AppTheme(fontFamily = desktopFontFamily) {
         Scaffold(
             bottomBar = {
                 if (!isTablet) {
@@ -408,7 +461,12 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                         Box(
                             Modifier
                                 .fillMaxSize()
-                                .weight(1f),
+                                .weight(1f)
+                                .dismissOnPrimaryClickAway(
+                                    enabled = isShowNowPlaylistScreen && isTabletLandscape && !isInFullscreen,
+                                ) {
+                                    isShowNowPlaylistScreen = false
+                                },
                         ) {
                             Box(
                                 Modifier
@@ -737,3 +795,31 @@ fun App(viewModel: SharedViewModel = koinInject()) {
         )
     }
 }
+
+private inline fun <reified T : Any> NavBackStackEntry.hasDesktopMouseNavigationRoute(): Boolean =
+    destination.hierarchy.any { it.hasRoute(T::class) }
+
+private fun NavBackStackEntry.toDesktopMouseNavigationDestination(): Any? =
+    when {
+        hasDesktopMouseNavigationRoute<HomeDestination>() -> HomeDestination
+        hasDesktopMouseNavigationRoute<SearchDestination>() -> SearchDestination
+        hasDesktopMouseNavigationRoute<LibraryDestination>() -> LibraryDestination
+        hasDesktopMouseNavigationRoute<FullscreenDestination>() -> FullscreenDestination
+        hasDesktopMouseNavigationRoute<CreditDestination>() -> CreditDestination
+        hasDesktopMouseNavigationRoute<MoodDestination>() -> runCatching { toRoute<MoodDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<NotificationDestination>() -> NotificationDestination
+        hasDesktopMouseNavigationRoute<RecentlySongsDestination>() -> RecentlySongsDestination
+        hasDesktopMouseNavigationRoute<SettingsDestination>() -> SettingsDestination
+        hasDesktopMouseNavigationRoute<AnalyticsDestination>() -> AnalyticsDestination
+        hasDesktopMouseNavigationRoute<LibraryDynamicPlaylistDestination>() -> runCatching { toRoute<LibraryDynamicPlaylistDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<AlbumDestination>() -> runCatching { toRoute<AlbumDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<ArtistDestination>() -> runCatching { toRoute<ArtistDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<LocalPlaylistDestination>() -> runCatching { toRoute<LocalPlaylistDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<MoreAlbumsDestination>() -> runCatching { toRoute<MoreAlbumsDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<PlaylistDestination>() -> runCatching { toRoute<PlaylistDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<PodcastDestination>() -> runCatching { toRoute<PodcastDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<LoginDestination>() -> LoginDestination
+        hasDesktopMouseNavigationRoute<SpotifyLoginDestination>() -> SpotifyLoginDestination
+        hasDesktopMouseNavigationRoute<DiscordLoginDestination>() -> DiscordLoginDestination
+        else -> null
+    }

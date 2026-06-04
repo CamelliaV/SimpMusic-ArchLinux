@@ -4,12 +4,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -24,11 +28,16 @@ import coil3.request.CachePolicy
 import coil3.request.crossfade
 import com.kdroid.composetray.tray.api.Tray
 import com.kdroid.composetray.utils.SingleInstanceManager
+import com.maxrave.common.SELECTED_LANGUAGE
+import com.maxrave.common.SELECTED_LANGUAGE_MANUAL
 import com.maxrave.data.di.loader.loadAllModules
 import com.maxrave.domain.manager.DataStoreManager
+import com.maxrave.domain.manager.DesktopFontFamily
+import com.maxrave.domain.manager.DesktopUiScale
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.ToastType
 import com.maxrave.simpmusic.di.viewModelModule
+import com.maxrave.simpmusic.extension.InstallDesktopMiddleMouseHorizontalDragDispatcher
 import com.maxrave.simpmusic.ui.component.CustomTitleBar
 import com.maxrave.simpmusic.ui.mini_player.MiniPlayerManager
 import com.maxrave.simpmusic.ui.mini_player.MiniPlayerWindow
@@ -68,6 +77,8 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     System.setProperty("compose.swing.render.on.graphics", "true")
     System.setProperty("compose.interop.blending", "true")
     System.setProperty("compose.layers.type", "COMPONENT")
+    System.setProperty("awt.useSystemAAFontSettings", "on")
+    System.setProperty("swing.aatext", "true")
 
     // Handle deep link URIs
     // macOS: receives URI via Desktop open URI handler (app already running or launched via scheme)
@@ -98,13 +109,14 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
         loadKoinModules(viewModelModule)
     }
 
+    val dataStoreManager = getKoin().get<DataStoreManager>()
     val language =
         runBlocking {
-            getKoin()
-                .get<DataStoreManager>()
-                .language
-                .first()
-                .substring(0..1)
+            val savedLanguage = dataStoreManager.getString(SELECTED_LANGUAGE).first()
+            val manuallySelected = dataStoreManager.getString(SELECTED_LANGUAGE_MANUAL).first() == DataStoreManager.TRUE
+            resolveDesktopLanguage(savedLanguage, manuallySelected).also { resolvedLanguage ->
+                dataStoreManager.putString(SELECTED_LANGUAGE, resolvedLanguage)
+            }
         }
     changeLanguageNative(language)
 
@@ -151,6 +163,8 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     }
 
     application {
+        val desktopUiScale by dataStoreManager.desktopUiScale.collectAsState(DesktopUiScale.DEFAULT)
+        val desktopFontFamily by dataStoreManager.desktopFontFamily.collectAsState(DesktopFontFamily.DEFAULT)
         // Main Window
         val windowState =
             rememberWindowState(
@@ -207,121 +221,82 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                 exitApplication()
             }
         }
-        // Detect virtual machines (Parallels, VirtualBox, VMware, etc.).
-        // Transparent + undecorated Compose windows don't render on VM
-        // GPU drivers — the window stays invisible while the JVM keeps
-        // running, so we must detect the VM and fall back to a normal
-        // decorated window.
-        //
-        // We probe Manufacturer + Model because brand strings live in
-        // different fields per hypervisor (Parallels-on-ARM puts
-        // "Parallels Software International Inc." in Manufacturer and
-        // "Parallels ARM Virtual Machine" in Model; VirtualBox uses
-        // "innotek GmbH" + "VirtualBox"; etc).
-        //
-        // Microsoft removed `wmic` from Windows 11 (deprecated since
-        // 10 21H1), so on modern Windows it returns "command not
-        // recognized" and our previous detection always saw an empty
-        // vendor — Parallels Win 11 ARM users hit this and got an
-        // invisible window. PowerShell `Get-CimInstance` is the modern
-        // replacement; we try it first and fall back to wmic for older
-        // hosts.
-        val isVM =
-            remember {
-                val osName = System.getProperty("os.name", "")
-                if (!osName.contains("Windows", ignoreCase = true)) {
-                    return@remember false
-                }
-                val probes =
-                    listOf(
-                        listOf(
-                            "powershell",
-                            "-NoProfile",
-                            "-Command",
-                            "(Get-CimInstance Win32_ComputerSystem | " +
-                                "Select-Object Manufacturer,Model | " +
-                                "Format-List | Out-String).Trim()",
-                        ),
-                        listOf("wmic", "computersystem", "get", "manufacturer,model"),
-                    )
-                val sysInfo =
-                    probes
-                        .asSequence()
-                        .mapNotNull { cmd ->
-                            runCatching {
-                                val p =
-                                    ProcessBuilder(cmd)
-                                        .redirectErrorStream(true)
-                                        .start()
-                                val out = p.inputStream.bufferedReader().readText()
-                                if (p.waitFor() == 0 && out.isNotBlank()) out else null
-                            }.getOrNull()
-                        }
-                        .firstOrNull()
-                        .orEmpty()
-                val vmTokens = listOf("Parallels", "VirtualBox", "VMware", "QEMU", "KVM", "Xen", "Hyper-V")
-                vmTokens.any { sysInfo.contains(it, ignoreCase = true) } ||
-                    System.getProperty("compose.window.no-transparent", "false").toBooleanStrictOrNull() == true
-            }
+        // Transparent + undecorated Compose windows can render as an
+        // invisible surface on some desktop stacks while the JVM keeps
+        // running. Keep the custom frame where it works, but fall back to
+        // an opaque decorated window on known-bad environments.
+        val requiresOpaqueWindow = remember { DesktopWindowCompatibility.requiresOpaqueWindow() }
+        val normalizedDesktopUiScale = DesktopUiScale.normalize(desktopUiScale)
         Window(
             onCloseRequest = {
                 isVisible = false
             },
             title = stringResource(Res.string.app_name),
             icon = painterResource(Res.drawable.circle_app_icon),
-            undecorated = !isVM,
-            transparent = !isVM,
+            undecorated = !requiresOpaqueWindow,
+            transparent = !requiresOpaqueWindow,
             state = windowState,
             visible = isVisible,
         ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (!isVM) {
-                                Modifier.clip(RoundedCornerShape(12.dp))
-                            } else {
-                                Modifier
-                            },
-                        ),
-            ) {
-                if (!isVM) {
-                    CustomTitleBar(
-                        title = stringResource(Res.string.app_name),
-                        windowState = windowState,
-                        window = window,
-                        onCloseRequest = {
-                            isVisible = false
-                        },
+            InstallDesktopMiddleMouseHorizontalDragDispatcher(uiScale = normalizedDesktopUiScale)
+            val baseDensity = LocalDensity.current
+            val scaledDensity =
+                remember(baseDensity, normalizedDesktopUiScale) {
+                    Density(
+                        density = baseDensity.density * normalizedDesktopUiScale,
+                        fontScale = baseDensity.fontScale,
                     )
                 }
+            CompositionLocalProvider(LocalDensity provides scaledDensity) {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (!requiresOpaqueWindow) {
+                                    Modifier.clip(RoundedCornerShape(12.dp))
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                ) {
+                    if (!requiresOpaqueWindow) {
+                        CustomTitleBar(
+                            title = stringResource(Res.string.app_name),
+                            windowState = windowState,
+                            window = window,
+                            onCloseRequest = {
+                                isVisible = false
+                            },
+                        )
+                    }
 
-                val context = LocalPlatformContext.current
-                setSingletonImageLoaderFactory {
-                    ImageLoader
-                        .Builder(context)
-                        .components {
-                            add(
-                                OkHttpNetworkFetcherFactory(
-                                    callFactory = {
-                                        OkHttpClient()
-                                    },
-                                ),
-                            )
-                        }.diskCachePolicy(CachePolicy.ENABLED)
-                        .networkCachePolicy(CachePolicy.ENABLED)
-                        .diskCache(
-                            DiskCache
-                                .Builder()
-                                .directory(FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "image_cache")
-                                .maxSizeBytes(512L * 1024 * 1024)
-                                .build(),
-                        ).crossfade(true)
-                        .build()
+                    val context = LocalPlatformContext.current
+                    setSingletonImageLoaderFactory {
+                        ImageLoader
+                            .Builder(context)
+                            .components {
+                                add(
+                                    OkHttpNetworkFetcherFactory(
+                                        callFactory = {
+                                            OkHttpClient()
+                                        },
+                                    ),
+                                )
+                            }.diskCachePolicy(CachePolicy.ENABLED)
+                            .networkCachePolicy(CachePolicy.ENABLED)
+                            .diskCache(
+                                DiskCache
+                                    .Builder()
+                                    .directory(FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "image_cache")
+                                    .maxSizeBytes(512L * 1024 * 1024)
+                                    .build(),
+                            ).crossfade(true)
+                            .build()
+                    }
+                    App()
+                    ToastHost()
                 }
-                App()
-                ToastHost()
             }
         }
 
@@ -332,6 +307,9 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                 onCloseRequest = {
                     MiniPlayerManager.isOpen = false
                 },
+                requiresOpaqueWindow = requiresOpaqueWindow,
+                uiScale = normalizedDesktopUiScale,
+                fontFamily = desktopFontFamily,
             )
         }
     }

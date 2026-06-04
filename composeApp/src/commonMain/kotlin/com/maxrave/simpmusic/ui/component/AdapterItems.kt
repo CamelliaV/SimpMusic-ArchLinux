@@ -81,6 +81,7 @@ import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.HorizontalScrollBar
+import com.maxrave.simpmusic.extension.desktopMiddleMouseHorizontalDrag
 import com.maxrave.simpmusic.extension.generateRandomColor
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
@@ -185,6 +186,7 @@ fun HomeItem(
             }
         }
         LazyRow(
+            modifier = Modifier.desktopMiddleMouseHorizontalDrag(lazyListState),
             state = lazyListState,
             flingBehavior = snapperFlingBehavior,
         ) {
@@ -1243,11 +1245,13 @@ fun MoodAndGenresContentItem(
                         horizontal = 15.dp,
                     ).fillMaxWidth(),
         )
+        val lazyListState = rememberLazyListState()
         LazyRow(
             modifier =
-                Modifier.padding(
-                    10.dp,
-                ),
+                Modifier
+                    .padding(10.dp)
+                    .desktopMiddleMouseHorizontalDrag(lazyListState),
+            state = lazyListState,
         ) {
             val itemList =
                 when (data) {

@@ -100,9 +100,13 @@ import com.maxrave.common.VIDEO_QUALITY
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
+import com.maxrave.domain.manager.DesktopFontFamily
+import com.maxrave.domain.manager.DesktopUiScale
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.canImportYouTubeCookiesFromBrowser
+import com.maxrave.simpmusic.expect.importYouTubeCookiesFromBrowser
 import com.maxrave.simpmusic.expect.ui.fileSaverResult
 import com.maxrave.simpmusic.expect.ui.openEqResult
 import com.maxrave.simpmusic.extension.bytesToMB
@@ -178,6 +182,7 @@ import simpmusic.composeapp.generated.resources.backup_frequency
 import simpmusic.composeapp.generated.resources.balance_media_loudness
 import simpmusic.composeapp.generated.resources.baseline_arrow_back_ios_new_24
 import simpmusic.composeapp.generated.resources.baseline_close_24
+import simpmusic.composeapp.generated.resources.baseline_downloading_24
 import simpmusic.composeapp.generated.resources.baseline_people_alt_24
 import simpmusic.composeapp.generated.resources.baseline_playlist_add_24
 import simpmusic.composeapp.generated.resources.better_lyrics
@@ -216,6 +221,12 @@ import simpmusic.composeapp.generated.resources.default_models
 import simpmusic.composeapp.generated.resources.description_and_licenses
 import simpmusic.composeapp.generated.resources.developer_blog
 import simpmusic.composeapp.generated.resources.developer_blog_tagline
+import simpmusic.composeapp.generated.resources.desktop_google_login_browser_import_failed
+import simpmusic.composeapp.generated.resources.desktop_google_login_description
+import simpmusic.composeapp.generated.resources.desktop_google_login_import_browser
+import simpmusic.composeapp.generated.resources.desktop_google_login_importing
+import simpmusic.composeapp.generated.resources.desktop_font_family
+import simpmusic.composeapp.generated.resources.desktop_ui_scale
 import simpmusic.composeapp.generated.resources.discord_integration
 import simpmusic.composeapp.generated.resources.donation
 import simpmusic.composeapp.generated.resources.download_quality
@@ -253,6 +264,8 @@ import simpmusic.composeapp.generated.resources.last_checked_at
 import simpmusic.composeapp.generated.resources.limit_player_cache
 import simpmusic.composeapp.generated.resources.local_tracking_description
 import simpmusic.composeapp.generated.resources.local_tracking_title
+import simpmusic.composeapp.generated.resources.login_failed
+import simpmusic.composeapp.generated.resources.login_success
 import simpmusic.composeapp.generated.resources.log_in_to_discord
 import simpmusic.composeapp.generated.resources.log_in_to_spotify
 import simpmusic.composeapp.generated.resources.log_out
@@ -437,6 +450,8 @@ fun SettingScreen(
     val proxyUsername by viewModel.proxyUsername.collectAsStateWithLifecycle()
     val proxyPassword by viewModel.proxyPassword.collectAsStateWithLifecycle()
     val autoCheckUpdate by viewModel.autoCheckUpdate.collectAsStateWithLifecycle()
+    val desktopUiScale by viewModel.desktopUiScale.collectAsStateWithLifecycle()
+    val desktopFontFamily by viewModel.desktopFontFamily.collectAsStateWithLifecycle()
     val blurFullscreenLyrics by viewModel.blurFullscreenLyrics.collectAsStateWithLifecycle()
     val blurPlayerBackground by viewModel.blurPlayerBackground.collectAsStateWithLifecycle()
     val aiProvider by viewModel.aiProvider.collectAsStateWithLifecycle()
@@ -491,8 +506,39 @@ fun SettingScreen(
     var showYouTubeAccountDialog by rememberSaveable {
         mutableStateOf(false)
     }
+    var browserCookieImporting by rememberSaveable {
+        mutableStateOf(false)
+    }
     var showThirdPartyLibraries by rememberSaveable {
         mutableStateOf(false)
+    }
+    fun importYouTubeLoginFromBrowser(closeDialogOnSuccess: Boolean) {
+        coroutineScope.launch {
+            browserCookieImporting = true
+            viewModel.makeToast(getString(Res.string.desktop_google_login_importing))
+            try {
+                val importedCookies = importYouTubeCookiesFromBrowser()
+                val success =
+                    viewModel.addAccount(
+                        importedCookies.cookieHeader,
+                        importedCookies.netscapeCookie,
+                    )
+                if (success) {
+                    viewModel.makeToast(getString(Res.string.login_success))
+                    viewModel.getAllGoogleAccount()
+                    if (closeDialogOnSuccess) {
+                        showYouTubeAccountDialog = false
+                    }
+                } else {
+                    viewModel.makeToast(getString(Res.string.login_failed))
+                }
+            } catch (error: Exception) {
+                Logger.e("SettingScreen", "Browser cookie import failed: ${error.message}")
+                viewModel.makeToast(getString(Res.string.desktop_google_login_browser_import_failed))
+            } finally {
+                browserCookieImporting = false
+            }
+        }
     }
 
     LaunchedEffect(true) {
@@ -536,6 +582,62 @@ fun SettingScreen(
                     smallSubtitle = true,
                     switch = (blurPlayerBackground to { viewModel.setBlurPlayerBackground(it) }),
                 )
+                if (getPlatform() != Platform.Android) {
+                    val selectedScale = DesktopUiScale.format(desktopUiScale)
+                    val selectedFontFamily = DesktopFontFamily.normalize(desktopFontFamily)
+                    SettingItem(
+                        title = stringResource(Res.string.desktop_ui_scale),
+                        subtitle = selectedScale,
+                        onClick = {
+                            viewModel.setAlertData(
+                                SettingAlertState(
+                                    title = runBlocking { getString(Res.string.desktop_ui_scale) },
+                                    selectOne =
+                                        SettingAlertState.SelectData(
+                                            listSelect =
+                                                DesktopUiScale.PRESETS.map { scale ->
+                                                    val label = DesktopUiScale.format(scale)
+                                                    (label == selectedScale) to label
+                                                },
+                                        ),
+                                    confirm =
+                                        runBlocking { getString(Res.string.change) } to { state ->
+                                            DesktopUiScale
+                                                .parse(state.selectOne?.getSelected())
+                                                ?.let(viewModel::setDesktopUiScale)
+                                        },
+                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                ),
+                            )
+                        },
+                    )
+                    SettingItem(
+                        title = stringResource(Res.string.desktop_font_family),
+                        subtitle = DesktopFontFamily.label(selectedFontFamily),
+                        onClick = {
+                            viewModel.setAlertData(
+                                SettingAlertState(
+                                    title = runBlocking { getString(Res.string.desktop_font_family) },
+                                    selectOne =
+                                        SettingAlertState.SelectData(
+                                            listSelect =
+                                                DesktopFontFamily.PRESETS.map { fontFamily ->
+                                                    (fontFamily == selectedFontFamily) to DesktopFontFamily.label(fontFamily)
+                                                },
+                                        ),
+                                    confirm =
+                                        runBlocking { getString(Res.string.change) } to { state ->
+                                            val selectedLabel = state.selectOne?.getSelected()
+                                            DesktopFontFamily.PRESETS
+                                                .firstOrNull { DesktopFontFamily.label(it) == selectedLabel }
+                                                ?.let(viewModel::setDesktopFontFamily)
+                                        },
+                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                ),
+                            )
+                        },
+                    )
+                }
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
                         title = stringResource(Res.string.enable_liquid_glass_effect),
@@ -563,6 +665,22 @@ fun SettingScreen(
                         showYouTubeAccountDialog = true
                     },
                 )
+                if (getPlatform() == Platform.Desktop) {
+                    SettingItem(
+                        title =
+                            if (browserCookieImporting) {
+                                stringResource(Res.string.desktop_google_login_importing)
+                            } else {
+                                stringResource(Res.string.desktop_google_login_import_browser)
+                            },
+                        subtitle = stringResource(Res.string.desktop_google_login_description),
+                        smallSubtitle = true,
+                        isEnable = !browserCookieImporting && canImportYouTubeCookiesFromBrowser(),
+                        onClick = {
+                            importYouTubeLoginFromBrowser(closeDialogOnSuccess = false)
+                        },
+                    )
+                }
                 SettingItem(
                     title = stringResource(Res.string.language),
                     subtitle = SUPPORTED_LANGUAGE.getLanguageFromCode(language ?: "en-US"),
@@ -2288,6 +2406,20 @@ fun SettingScreen(
                     }
                     item {
                         Column {
+                            if (getPlatform() == Platform.Desktop) {
+                                ActionButton(
+                                    icon = painterResource(Res.drawable.baseline_downloading_24),
+                                    text =
+                                        if (browserCookieImporting) {
+                                            Res.string.desktop_google_login_importing
+                                        } else {
+                                            Res.string.desktop_google_login_import_browser
+                                        },
+                                    enable = !browserCookieImporting && canImportYouTubeCookiesFromBrowser(),
+                                ) {
+                                    importYouTubeLoginFromBrowser(closeDialogOnSuccess = true)
+                                }
+                            }
                             ActionButton(
                                 icon = painterResource(Res.drawable.baseline_people_alt_24),
                                 text = Res.string.guest,

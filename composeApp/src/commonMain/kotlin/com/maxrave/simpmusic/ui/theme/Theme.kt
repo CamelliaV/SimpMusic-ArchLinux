@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import com.maxrave.domain.manager.DesktopFontFamily
 
 val DarkColors =
     darkColorScheme(
@@ -43,18 +44,23 @@ val DarkColors =
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppTheme(
+    fontFamily: String = DesktopFontFamily.DEFAULT,
     content:
         @Composable()
         () -> Unit,
 ) {
-    MaterialExpressiveTheme(
-        colorScheme = DarkColors,
-        content = {
-            CompositionLocalProvider(
-                LocalContentColor provides DarkColors.onSurfaceVariant, // replace this with needed color from your pallete
-                content,
-            )
-        },
-        typography = typo(),
-    )
+    CompositionLocalProvider(
+        LocalAppFontFamily provides DesktopFontFamily.normalize(fontFamily),
+    ) {
+        MaterialExpressiveTheme(
+            colorScheme = DarkColors,
+            content = {
+                CompositionLocalProvider(
+                    LocalContentColor provides DarkColors.onSurfaceVariant, // replace this with needed color from your pallete
+                    content,
+                )
+            },
+            typography = typo(),
+        )
+    }
 }

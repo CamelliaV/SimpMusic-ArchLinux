@@ -3,16 +3,24 @@ package com.maxrave.simpmusic.ui.screen.login
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LogoDev
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -27,10 +35,15 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.maxrave.common.Config
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.expect.canImportYouTubeCookiesFromBrowser
+import com.maxrave.simpmusic.expect.importYouTubeCookiesFromBrowser
+import com.maxrave.simpmusic.expect.openUrl
+import com.maxrave.simpmusic.expect.useEmbeddedGoogleLoginWebView
 import com.maxrave.simpmusic.expect.ui.PlatformWebView
 import com.maxrave.simpmusic.expect.ui.createWebViewCookieManager
 import com.maxrave.simpmusic.expect.ui.rememberWebViewState
@@ -51,6 +64,15 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.baseline_arrow_back_ios_new_24
+import simpmusic.composeapp.generated.resources.desktop_google_login_browser_import_failed
+import simpmusic.composeapp.generated.resources.desktop_google_login_compact_input
+import simpmusic.composeapp.generated.resources.desktop_google_login_cookie_placeholder
+import simpmusic.composeapp.generated.resources.desktop_google_login_description
+import simpmusic.composeapp.generated.resources.desktop_google_login_import_browser
+import simpmusic.composeapp.generated.resources.desktop_google_login_imported_from
+import simpmusic.composeapp.generated.resources.desktop_google_login_importing
+import simpmusic.composeapp.generated.resources.desktop_google_login_open_browser
+import simpmusic.composeapp.generated.resources.desktop_google_login_with_cookie
 import simpmusic.composeapp.generated.resources.log_in
 import simpmusic.composeapp.generated.resources.login_failed
 import simpmusic.composeapp.generated.resources.login_success
@@ -69,6 +91,15 @@ fun LoginScreen(
     val coroutineScope = rememberCoroutineScope()
     var devLoginSheet by rememberSaveable {
         mutableStateOf(false)
+    }
+    var desktopCookie by rememberSaveable {
+        mutableStateOf("")
+    }
+    var browserCookieImporting by rememberSaveable {
+        mutableStateOf(false)
+    }
+    var browserCookieImportStatus by rememberSaveable {
+        mutableStateOf<String?>(null)
     }
 
     val state = rememberWebViewState()
@@ -101,60 +132,138 @@ fun LoginScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)) {
-        Column {
+        Column(modifier = Modifier.fillMaxSize()) {
             Spacer(
                 Modifier
                     .size(
                         innerPadding.calculateTopPadding() + 64.dp,
                     ),
             )
-            // WebView for YouTube Music login
-            PlatformWebView(
-                state,
-                Config.LOG_IN_URL,
-                aboveContent = {
-                    if (devLoginSheet) {
-                        DevLogInBottomSheet(
-                            onDismiss = {
-                                devLoginSheet = false
-                            },
-                            onDone = { cookie ->
-                                coroutineScope.launch {
-                                    val success = settingsViewModel.addAccount(cookie)
-                                    if (success) {
-                                        viewModel.makeToast(getString(Res.string.login_success))
-                                        navController.navigateUp()
-                                    } else {
-                                        viewModel.makeToast(getString(Res.string.login_failed))
+            if (useEmbeddedGoogleLoginWebView()) {
+                // WebView for YouTube Music login
+                PlatformWebView(
+                    state,
+                    Config.LOG_IN_URL,
+                    aboveContent = {
+                        if (devLoginSheet) {
+                            DevLogInBottomSheet(
+                                onDismiss = {
+                                    devLoginSheet = false
+                                },
+                                onDone = { cookie ->
+                                    coroutineScope.launch {
+                                        val success = settingsViewModel.addAccount(cookie)
+                                        if (success) {
+                                            viewModel.makeToast(getString(Res.string.login_success))
+                                            navController.navigateUp()
+                                        } else {
+                                            viewModel.makeToast(getString(Res.string.login_failed))
+                                        }
                                     }
-                                }
-                            },
-                            type = DevLogInType.YouTube,
-                        )
-                    }
-                }
-            ) { url ->
-                Logger.d("LogInScreen", "Current URL: $url")
-                if (url == Config.YOUTUBE_MUSIC_MAIN_URL) {
-                    coroutineScope.launch {
-                        val success =
-                            createWebViewCookieManager()
-                                .getCookie(url)
-                                .takeIf {
-                                    it.isNotEmpty()
-                                }?.let {
-                                    settingsViewModel.addAccount(it)
-                                } ?: false
+                                },
+                                type = DevLogInType.YouTube,
+                            )
+                        }
+                    },
+                ) { url ->
+                    Logger.d("LogInScreen", "Current URL: $url")
+                    if (url == Config.YOUTUBE_MUSIC_MAIN_URL) {
+                        coroutineScope.launch {
+                            val success =
+                                createWebViewCookieManager()
+                                    .getCookie(url)
+                                    .takeIf {
+                                        it.isNotEmpty()
+                                    }?.let {
+                                        settingsViewModel.addAccount(it)
+                                    } ?: false
 
-                        createWebViewCookieManager().removeAllCookies()
+                            createWebViewCookieManager().removeAllCookies()
 
-                        if (success) {
-                            viewModel.makeToast(getString(Res.string.login_success))
-                            navController.navigateUp()
-                        } else {
-                            viewModel.makeToast(getString(Res.string.login_failed))
+                            if (success) {
+                                viewModel.makeToast(getString(Res.string.login_success))
+                                navController.navigateUp()
+                            } else {
+                                viewModel.makeToast(getString(Res.string.login_failed))
+                            }
                         }
                     }
+                }
+            } else {
+                DesktopGoogleLoginPanel(
+                    modifier = Modifier.weight(1f),
+                    cookie = desktopCookie,
+                    canImportFromBrowser = canImportYouTubeCookiesFromBrowser(),
+                    browserImporting = browserCookieImporting,
+                    browserImportStatus = browserCookieImportStatus,
+                    onCookieChange = { desktopCookie = it },
+                    onImportFromBrowser = {
+                        coroutineScope.launch {
+                            browserCookieImporting = true
+                            browserCookieImportStatus = getString(Res.string.desktop_google_login_importing)
+                            runCatching {
+                                importYouTubeCookiesFromBrowser()
+                            }.onSuccess { importedCookies ->
+                                desktopCookie = importedCookies.cookieHeader
+                                browserCookieImportStatus =
+                                    getString(
+                                        Res.string.desktop_google_login_imported_from,
+                                        importedCookies.sourceDescription,
+                                    )
+                                val success =
+                                    settingsViewModel.addAccount(
+                                        importedCookies.cookieHeader,
+                                        importedCookies.netscapeCookie,
+                                    )
+                                if (success) {
+                                    viewModel.makeToast(getString(Res.string.login_success))
+                                    navController.navigateUp()
+                                } else {
+                                    viewModel.makeToast(getString(Res.string.login_failed))
+                                }
+                            }.onFailure { error ->
+                                Logger.e("LogInScreen", "Browser cookie import failed: ${error.message}")
+                                browserCookieImportStatus = error.message
+                                viewModel.makeToast(getString(Res.string.desktop_google_login_browser_import_failed))
+                            }
+                            browserCookieImporting = false
+                        }
+                    },
+                    onOpenBrowser = { openUrl(Config.LOG_IN_URL) },
+                    onSubmit = {
+                        coroutineScope.launch {
+                            val success = settingsViewModel.addAccount(desktopCookie)
+                            if (success) {
+                                viewModel.makeToast(getString(Res.string.login_success))
+                                navController.navigateUp()
+                            } else {
+                                viewModel.makeToast(getString(Res.string.login_failed))
+                            }
+                        }
+                    },
+                    onOpenManualSheet = {
+                        devLoginSheet = true
+                    },
+                )
+                if (devLoginSheet) {
+                    DevLogInBottomSheet(
+                        onDismiss = {
+                            devLoginSheet = false
+                        },
+                        onDone = { cookie ->
+                            desktopCookie = cookie
+                            coroutineScope.launch {
+                                val success = settingsViewModel.addAccount(cookie)
+                                if (success) {
+                                    viewModel.makeToast(getString(Res.string.login_success))
+                                    navController.navigateUp()
+                                } else {
+                                    viewModel.makeToast(getString(Res.string.login_failed))
+                                }
+                            }
+                        },
+                        type = DevLogInType.YouTube,
+                    )
                 }
             }
         }
@@ -201,5 +310,111 @@ fun LoginScreen(
                     containerColor = Color.Transparent,
                 ),
         )
+    }
+}
+
+@Composable
+private fun DesktopGoogleLoginPanel(
+    modifier: Modifier = Modifier,
+    cookie: String,
+    canImportFromBrowser: Boolean,
+    browserImporting: Boolean,
+    browserImportStatus: String?,
+    onCookieChange: (String) -> Unit,
+    onImportFromBrowser: () -> Unit,
+    onOpenBrowser: () -> Unit,
+    onSubmit: () -> Unit,
+    onOpenManualSheet: () -> Unit,
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = stringResource(Res.string.desktop_google_login_description),
+                style = typo().labelMedium,
+                textAlign = TextAlign.Center,
+            )
+            Button(
+                onClick = onImportFromBrowser,
+                enabled = canImportFromBrowser && !browserImporting,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (browserImporting) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Text(
+                            stringResource(Res.string.desktop_google_login_importing),
+                            style = typo().labelSmall,
+                        )
+                    }
+                } else {
+                    Text(
+                        stringResource(Res.string.desktop_google_login_import_browser),
+                        style = typo().labelSmall,
+                    )
+                }
+            }
+            browserImportStatus?.takeIf { it.isNotBlank() }?.let { status ->
+                Text(
+                    text = status,
+                    style = typo().bodySmall,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            TextButton(
+                onClick = onOpenBrowser,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    stringResource(Res.string.desktop_google_login_open_browser),
+                    style = typo().labelSmall,
+                )
+            }
+            OutlinedTextField(
+                value = cookie,
+                onValueChange = onCookieChange,
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 4,
+                maxLines = 8,
+                placeholder = {
+                    Text(
+                        stringResource(Res.string.desktop_google_login_cookie_placeholder),
+                        style = typo().bodySmall,
+                    )
+                },
+            )
+            Button(
+                onClick = onSubmit,
+                enabled = cookie.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    stringResource(Res.string.desktop_google_login_with_cookie),
+                    style = typo().labelSmall,
+                )
+            }
+            TextButton(onClick = onOpenManualSheet) {
+                Text(
+                    stringResource(Res.string.desktop_google_login_compact_input),
+                    style = typo().labelSmall,
+                )
+            }
+        }
     }
 }

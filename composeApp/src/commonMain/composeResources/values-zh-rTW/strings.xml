@@ -546,4 +546,13 @@
     <string name="bpm">鼓點/分鐘</string>
     <string name="key">索引</string>
     <string name="scale">規模</string>
+    <string name="desktop_google_login_description">這是本 fork 新增的桌面登入方式：Google 會攔截內嵌 WebView 登入，因此這裡會直接讀取你桌面瀏覽器中已登入的 YouTube Cookie。</string>
+    <string name="desktop_google_login_import_browser">Fork 新增：從瀏覽器匯入 YouTube 登入</string>
+    <string name="desktop_google_login_importing">正在匯入瀏覽器 Cookie</string>
+    <string name="desktop_google_login_imported_from">已從 %1$s 匯入</string>
+    <string name="desktop_google_login_browser_import_failed">瀏覽器 Cookie 匯入失敗</string>
+    <string name="desktop_google_login_open_browser">在瀏覽器中開啟 Google 登入</string>
+    <string name="desktop_google_login_cookie_placeholder">貼上 YouTube Music Cookie</string>
+    <string name="desktop_google_login_with_cookie">使用 Cookie 登入</string>
+    <string name="desktop_google_login_compact_input">使用精簡 Cookie 輸入</string>
 </resources>

@@ -4,6 +4,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +24,7 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.maxrave.simpmusic.extension.greyScale
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.SettingsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDestination
 import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.theme.typo
@@ -54,6 +57,11 @@ fun AppBottomNavigationBar(
             },
         )
     }
+    val currentDestination = currentBackStackEntry?.destination
+    val selectedBottomRoute =
+        bottomNavScreens.firstOrNull { screen ->
+            currentDestination?.hierarchy?.any { it.hasRoute(screen.destination::class) } == true
+        }
     Box(
         modifier =
             Modifier
@@ -85,10 +93,11 @@ fun AppBottomNavigationBar(
                 },
         ) {
             bottomNavScreens.forEach { screen ->
+                val isSelected = selectedBottomRoute?.ordinal?.let { it == screen.ordinal } ?: (selectedIndex == screen.ordinal)
                 NavigationBarItem(
-                    selected = selectedIndex == screen.ordinal,
+                    selected = isSelected,
                     onClick = {
-                        if (selectedIndex == screen.ordinal) {
+                        if (isSelected) {
                             if (currentBackStackEntry?.destination?.hierarchy?.any {
                                     it.hasRoute(screen.destination::class)
                                 } == true
@@ -114,7 +123,7 @@ fun AppBottomNavigationBar(
                         Text(
                             stringResource(screen.title),
                             style =
-                                if (selectedIndex == screen.ordinal) {
+                                if (isSelected) {
                                     typo().bodySmall
                                 } else {
                                     typo().bodySmall.greyScale()
@@ -155,6 +164,13 @@ fun AppNavigationRail(
             },
         )
     }
+    val currentDestination = currentBackStackEntry?.destination
+    val selectedBottomRoute =
+        bottomNavScreens.firstOrNull { screen ->
+            currentDestination?.hierarchy?.any { it.hasRoute(screen.destination::class) } == true
+        }
+    val isSettingsSelected =
+        currentDestination?.hierarchy?.any { it.hasRoute(SettingsDestination::class) } == true
     NavigationRail {
         Spacer(Modifier.height(16.dp))
         Box(Modifier.padding(horizontal = 16.dp)) {
@@ -176,23 +192,51 @@ fun AppNavigationRail(
             }
         }
         Spacer(Modifier.weight(1f))
+        NavigationRailItem(
+            icon = {
+                Icon(
+                    Icons.Rounded.Settings,
+                    contentDescription = null,
+                )
+            },
+            label = {
+                Text(
+                    stringResource(Res.string.settings),
+                    style =
+                        if (isSettingsSelected) {
+                            typo().bodySmall
+                        } else {
+                            typo().bodySmall.greyScale()
+                        },
+                )
+            },
+            selected = isSettingsSelected,
+            onClick = {
+                if (!isSettingsSelected) {
+                    navController.navigate(SettingsDestination) {
+                        launchSingleTop = true
+                    }
+                }
+            },
+        )
         bottomNavScreens.forEachIndexed { index, screen ->
+            val isSelected = selectedBottomRoute?.ordinal?.let { it == screen.ordinal } ?: (selectedIndex == index)
             NavigationRailItem(
                 icon = screen.icon,
                 label = {
                     Text(
                         stringResource(screen.title),
                         style =
-                            if (selectedIndex == screen.ordinal) {
+                            if (isSelected) {
                                 typo().bodySmall
                             } else {
                                 typo().bodySmall.greyScale()
                             },
                     )
                 },
-                selected = selectedIndex == index,
+                selected = isSelected,
                 onClick = {
-                    if (selectedIndex == screen.ordinal) {
+                    if (isSelected) {
                         if (currentBackStackEntry?.destination?.hierarchy?.any {
                                 it.hasRoute(screen.destination::class)
                             } == true

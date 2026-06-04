@@ -3,6 +3,7 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec.Type.INT
 import com.codingfeline.buildkonfig.compiler.FieldSpec.Type.STRING
 import org.gradle.api.file.RelativePath
+import org.gradle.internal.os.OperatingSystem
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.net.URI
@@ -13,6 +14,23 @@ val isFullBuild: Boolean =
         extra["isFullBuild"] == "true"
     } catch (e: Exception) {
         false
+    }
+
+val javafxPlatform: String =
+    when {
+        OperatingSystem.current().isLinux -> {
+            val arch = System.getProperty("os.arch").lowercase()
+            if (arch.contains("aarch64") || arch.contains("arm64")) "linux-aarch64" else "linux"
+        }
+
+        OperatingSystem.current().isMacOsX -> {
+            val arch = System.getProperty("os.arch").lowercase()
+            if (arch.contains("aarch64") || arch.contains("arm64")) "mac-aarch64" else "mac"
+        }
+
+        OperatingSystem.current().isWindows -> "win"
+
+        else -> throw GradleException("Unsupported JavaFX host OS: ${System.getProperty("os.name")}")
     }
 
 plugins {
@@ -167,7 +185,13 @@ kotlin {
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.sentry.jvm)
             implementation(libs.native.tray)
+            implementation(libs.androidx.sqlite.bundled)
             implementation(projects.mediaJvmUi)
+            listOf("base", "graphics", "controls", "media", "web", "swing").forEach { module ->
+                implementation("org.openjfx:javafx-$module:${libs.versions.javafx.get()}:$javafxPlatform") {
+                    isTransitive = false
+                }
+            }
         }
     }
 }
@@ -576,4 +600,3 @@ afterEvaluate {
             dependsOn("generateBuildKonfig")
         }
 }
-

@@ -337,6 +337,8 @@
     <string name="repeat_off">关闭循环播放</string>
     <string name="youtube_transcript">YouTube 字幕</string>
     <string name="user_interface">界面</string>
+    <string name="desktop_ui_scale">桌面界面缩放</string>
+    <string name="desktop_font_family">桌面字体</string>
     <string name="donation">如果你喜欢我的作品，支持我一下</string>
     <string name="relax">放松</string>
     <string name="sleep">睡眠</string>
@@ -394,4 +396,13 @@
     <string name="invalid">无效的</string>
     <string name="favorite_podcasts">最喜爱的播客</string>
     <string name="no_favorite_podcasts">没有最喜爱的播客</string>
+    <string name="desktop_google_login_description">这是本 fork 新增的桌面登录方式：Google 会拦截内嵌 WebView 登录，因此这里会直接读取你桌面浏览器中已登录的 YouTube Cookie。</string>
+    <string name="desktop_google_login_import_browser">Fork 新增：从浏览器导入 YouTube 登录</string>
+    <string name="desktop_google_login_importing">正在导入浏览器 Cookie</string>
+    <string name="desktop_google_login_imported_from">已从 %1$s 导入</string>
+    <string name="desktop_google_login_browser_import_failed">浏览器 Cookie 导入失败</string>
+    <string name="desktop_google_login_open_browser">在浏览器中打开 Google 登录</string>
+    <string name="desktop_google_login_cookie_placeholder">粘贴 YouTube Music Cookie</string>
+    <string name="desktop_google_login_with_cookie">使用 Cookie 登录</string>
+    <string name="desktop_google_login_compact_input">使用紧凑 Cookie 输入</string>
 </resources>

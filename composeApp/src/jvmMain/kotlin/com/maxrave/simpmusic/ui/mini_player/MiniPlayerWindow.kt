@@ -1,6 +1,7 @@
 package com.maxrave.simpmusic.ui.mini_player
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,13 +12,19 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
+import com.maxrave.domain.manager.DesktopFontFamily
+import com.maxrave.domain.manager.DesktopUiScale
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.DesktopWindowCompatibility
+import com.maxrave.simpmusic.ui.theme.LocalAppFontFamily
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
 import org.jetbrains.compose.resources.painterResource
@@ -43,6 +50,9 @@ import java.util.prefs.Preferences
 fun MiniPlayerWindow(
     sharedViewModel: SharedViewModel,
     onCloseRequest: () -> Unit,
+    requiresOpaqueWindow: Boolean = DesktopWindowCompatibility.requiresOpaqueWindow(),
+    uiScale: Float = DesktopUiScale.DEFAULT,
+    fontFamily: String = DesktopFontFamily.DEFAULT,
 ) {
     val prefs = remember { Preferences.userRoot().node("SimpMusic/MiniPlayer") }
 
@@ -88,8 +98,8 @@ fun MiniPlayerWindow(
         title = "SimpMusic - Mini Player",
         icon = painterResource(Res.drawable.circle_app_icon),
         alwaysOnTop = true,
-        undecorated = true,
-        transparent = true,
+        undecorated = !requiresOpaqueWindow,
+        transparent = !requiresOpaqueWindow,
         resizable = true,
         state = windowState,
         onKeyEvent = { keyEvent ->
@@ -115,6 +125,15 @@ fun MiniPlayerWindow(
             }
         },
     ) {
+        val baseDensity = LocalDensity.current
+        val scaledDensity =
+            remember(baseDensity, uiScale) {
+                Density(
+                    density = baseDensity.density * DesktopUiScale.normalize(uiScale),
+                    fontScale = baseDensity.fontScale,
+                )
+            }
+
         // Set minimum size at AWT level to prevent flickering
         LaunchedEffect(Unit) {
             (window as? java.awt.Window)?.minimumSize =
@@ -124,10 +143,15 @@ fun MiniPlayerWindow(
                 )
         }
 
-        MiniPlayerRoot(
-            sharedViewModel = sharedViewModel,
-            onClose = onCloseRequest,
-            windowState = windowState,
-        )
+        CompositionLocalProvider(
+            LocalDensity provides scaledDensity,
+            LocalAppFontFamily provides DesktopFontFamily.normalize(fontFamily),
+        ) {
+            MiniPlayerRoot(
+                sharedViewModel = sharedViewModel,
+                onClose = onCloseRequest,
+                windowState = windowState,
+            )
+        }
     }
 }

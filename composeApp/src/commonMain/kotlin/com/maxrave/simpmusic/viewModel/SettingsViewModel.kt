@@ -8,11 +8,14 @@ import com.eygraber.uri.Uri
 import com.maxrave.common.Config
 import com.maxrave.common.QUALITY
 import com.maxrave.common.SELECTED_LANGUAGE
+import com.maxrave.common.SELECTED_LANGUAGE_MANUAL
 import com.maxrave.common.VIDEO_QUALITY
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.GoogleAccountEntity
 import com.maxrave.domain.extension.toNetScapeString
 import com.maxrave.domain.manager.DataStoreManager
+import com.maxrave.domain.manager.DesktopFontFamily
+import com.maxrave.domain.manager.DesktopUiScale
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.repository.AccountRepository
 import com.maxrave.domain.repository.CacheRepository
@@ -102,6 +105,10 @@ class SettingsViewModel(
     val canvasCacheSize: StateFlow<Long?> = _canvasCacheSize
     private var _translucentBottomBar: MutableStateFlow<String?> = MutableStateFlow(null)
     val translucentBottomBar: StateFlow<String?> = _translucentBottomBar
+    private var _desktopUiScale = MutableStateFlow(DesktopUiScale.DEFAULT)
+    val desktopUiScale: StateFlow<Float> = _desktopUiScale
+    private var _desktopFontFamily = MutableStateFlow(DesktopFontFamily.DEFAULT)
+    val desktopFontFamily: StateFlow<String> = _desktopFontFamily
     private var _usingProxy = MutableStateFlow(false)
     val usingProxy: StateFlow<Boolean> = _usingProxy
     private var _proxyType = MutableStateFlow(DataStoreManager.ProxyType.PROXY_TYPE_HTTP)
@@ -253,6 +260,8 @@ class SettingsViewModel(
         getUsingProxy()
         getCanvasCache()
         getTranslucentBottomBar()
+        getDesktopUiScale()
+        getDesktopFontFamily()
         getAutoCheckUpdate()
         getBlurFullscreenLyrics()
         getBlurPlayerBackground()
@@ -860,6 +869,38 @@ class SettingsViewModel(
         }
     }
 
+    fun getDesktopUiScale() {
+        viewModelScope.launch {
+            dataStoreManager.desktopUiScale.collect { scale ->
+                _desktopUiScale.emit(DesktopUiScale.normalize(scale))
+            }
+        }
+    }
+
+    fun setDesktopUiScale(scale: Float) {
+        val normalizedScale = DesktopUiScale.normalize(scale)
+        _desktopUiScale.value = normalizedScale
+        viewModelScope.launch {
+            dataStoreManager.setDesktopUiScale(normalizedScale)
+        }
+    }
+
+    fun getDesktopFontFamily() {
+        viewModelScope.launch {
+            dataStoreManager.desktopFontFamily.collect { fontFamily ->
+                _desktopFontFamily.emit(DesktopFontFamily.normalize(fontFamily))
+            }
+        }
+    }
+
+    fun setDesktopFontFamily(fontFamily: String) {
+        val normalizedFontFamily = DesktopFontFamily.normalize(fontFamily)
+        _desktopFontFamily.value = normalizedFontFamily
+        viewModelScope.launch {
+            dataStoreManager.setDesktopFontFamily(normalizedFontFamily)
+        }
+    }
+
     fun getThumbCacheSize(context: PlatformContext) {
         viewModelScope.launch {
             val diskCache = SingletonImageLoader.get(context).diskCache
@@ -1140,6 +1181,7 @@ class SettingsViewModel(
 
     fun changeLanguage(code: String) {
         viewModelScope.launch {
+            dataStoreManager.putString(SELECTED_LANGUAGE_MANUAL, DataStoreManager.TRUE)
             dataStoreManager.putString(SELECTED_LANGUAGE, code)
             Logger.w("SettingsViewModel", "changeLanguage: $code")
             getLanguage()

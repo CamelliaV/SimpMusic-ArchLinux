@@ -95,6 +95,7 @@ import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.extension.angledGradientBackground
+import com.maxrave.simpmusic.extension.desktopMiddleMouseHorizontalDrag
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
@@ -788,6 +789,7 @@ fun HomeScreen(
                     modifier =
                         Modifier
                             .horizontalScroll(chipRowState)
+                            .desktopMiddleMouseHorizontalDrag(chipRowState)
                             .padding(vertical = 8.dp, horizontal = 15.dp)
                             .background(Color.Transparent),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -980,7 +982,10 @@ fun QuickPicks(
         )
         LazyHorizontalGrid(
             rows = GridCells.Fixed(4),
-            modifier = Modifier.height(256.dp),
+            modifier =
+                Modifier
+                    .height(256.dp)
+                    .desktopMiddleMouseHorizontalDrag(lazyListState),
             state = lazyListState,
             flingBehavior = snapperFlingBehavior,
         ) {
@@ -1044,7 +1049,10 @@ fun MoodMomentAndGenre(
         )
         LazyHorizontalGrid(
             rows = GridCells.Fixed(3),
-            modifier = Modifier.height(210.dp),
+            modifier =
+                Modifier
+                    .height(210.dp)
+                    .desktopMiddleMouseHorizontalDrag(lazyListState1),
             state = lazyListState1,
             flingBehavior = snapperFlingBehavior1,
         ) {
@@ -1070,7 +1078,10 @@ fun MoodMomentAndGenre(
         )
         LazyHorizontalGrid(
             rows = GridCells.Fixed(3),
-            modifier = Modifier.height(210.dp),
+            modifier =
+                Modifier
+                    .height(210.dp)
+                    .desktopMiddleMouseHorizontalDrag(lazyListState2),
             state = lazyListState2,
             flingBehavior = snapperFlingBehavior2,
         ) {
@@ -1140,7 +1151,11 @@ fun ChartData(
             )
             val lazyListState = rememberLazyListState()
             val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyListState = lazyListState))
-            LazyRow(flingBehavior = snapperFlingBehavior) {
+            LazyRow(
+                modifier = Modifier.desktopMiddleMouseHorizontalDrag(lazyListState),
+                state = lazyListState,
+                flingBehavior = snapperFlingBehavior,
+            ) {
                 items(item.playlists.size, key = { index ->
                     val data = item.playlists[index]
                     data.id + data.title + index
@@ -1171,7 +1186,10 @@ fun ChartData(
         )
         LazyHorizontalGrid(
             rows = GridCells.Fixed(3),
-            modifier = Modifier.height(240.dp),
+            modifier =
+                Modifier
+                    .height(240.dp)
+                    .desktopMiddleMouseHorizontalDrag(lazyListState2),
             state = lazyListState2,
             flingBehavior = snapperFlingBehavior2,
         ) {

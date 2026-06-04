@@ -1,3 +1,85 @@
+# SimpMusic - CamelliaV Desktop Fork
+
+This repository is a desktop-focused fork of [maxrave-dev/SimpMusic](https://github.com/maxrave-dev/SimpMusic). It keeps the upstream Android and Desktop feature set, then adds Linux desktop fixes and workflow improvements aimed at making SimpMusic usable as a daily desktop music client on KDE Wayland + NVIDIA.
+
+The main fork goal is practical desktop behavior: hardware-rendered startup, automatic browser-cookie login, readable desktop scaling/fonts, mouse navigation, and local packaging that works on the target machine without falling back to software rendering.
+
+## Fork Desktop Screenshots
+
+<p align="center">
+  <img src="asset/screenshot/fork-desktop-home.png" alt="SimpMusic desktop home on KDE Wayland" width="900" />
+</p>
+
+<p align="center">
+  <img src="asset/screenshot/fork-desktop-settings-login.png" alt="Fork browser-cookie YouTube login entry in desktop Settings" width="440" />
+  <img src="asset/screenshot/fork-desktop-settings-font.png" alt="Desktop font selector in Settings" width="440" />
+</p>
+
+## What This Fork Adds
+
+### Linux Desktop Runtime
+
+- **Wayland + NVIDIA hardware rendering fix:** Linux Wayland windows use an opaque decorated Compose window path to avoid the black-window failure from the transparent + undecorated Skiko window path. The app still runs through hardware OpenGL instead of Skiko software rendering.
+- **Hardware-first launcher:** the local launcher forces the OpenGL/NVIDIA path with `SKIKO_RENDER_API=OPENGL`, `skiko.renderApi=OPENGL`, NVIDIA GLX selection, and Skiko vsync/frame-limiter flags. The fork intentionally does not keep a software-rendering launcher variant.
+- **High-refresh display support:** the launcher keeps Skiko vsync and refresh-rate fallback enabled so 165 Hz / 240 Hz desktop displays are not intentionally capped by a static 60 fps launcher setting.
+- **Bundled VLC native lookup:** desktop playback can resolve VLC from `vlc.bundled.path` and from the packaged app's `lib/app/vlc` directory. The launcher passes the bundled path explicitly.
+- **Java-direct packaged startup:** the local launcher starts the packaged jars through Java directly, avoiding the local jpackage native launcher crash while keeping the same app bundle.
+
+### Desktop YouTube Login
+
+- **One-click browser-cookie login:** the desktop Google login flow can import YouTube cookies from an already signed-in Chromium-based browser, similar in purpose to `yt-dlp --cookies-from-browser`.
+- **Linux Chromium cookie decryption:** the importer copies browser cookie databases before reading them, handles Chromium `v10`/`v11` encrypted cookie values, and can use `kwallet-query` when Chromium stores its Safe Storage key in KDE KWallet.
+- **Dual cookie persistence:** imported cookies are stored both as SimpMusic account cookies and as a Netscape-format `ytdlp-cookie.txt` file for the existing YouTube extractor path.
+- **Fork-specific login UI:** browser-cookie import is exposed on the desktop login screen, the Settings content page, and the YouTube account dialog. The UI labels mark this as a fork-only feature.
+- **Desktop WebView fallback:** desktop WebView screens use JavaFX WebView through Compose `SwingPanel`, with desktop cookie handling and Discord token extraction support.
+
+### Desktop UX Improvements
+
+- **150% default desktop scale:** desktop builds default to 150% UI scale and include a Settings control for changing it. The scale is persisted and applied to both the main window and mini-player.
+- **Selectable desktop font:** Settings include a desktop font selector. The fork includes Noto Sans and Noto Sans SC resources and keeps a system-font option.
+- **Sharper desktop text:** AWT/Swing text antialiasing is enabled and the Poppins font-weight mapping is corrected so regular, medium, semibold, and bold text render through the expected font files.
+- **Desktop locale detection:** if the user has not manually selected a language, the desktop app follows `LC_MESSAGES` or KDE Plasma's `plasma-localerc` before falling back to the JVM locale.
+- **Settings access from the desktop sidebar:** the left navigation area exposes Settings near the top so desktop users can jump there from the main layout and return through normal navigation.
+
+### Desktop Mouse Behavior
+
+- **Middle-button horizontal drag:** horizontal content can be moved by holding the middle mouse button and dragging over supported areas. On Linux this fork can read evdev mouse events directly when Wayland/Compose/AWT do not deliver the needed events reliably.
+- **Mouse side buttons:** side buttons map to browser-style back/forward navigation in the desktop app.
+- **Mini-player panel dismissal:** expanded mini-player content can be dismissed by clicking outside it while preserving the intended mini-player placement behavior.
+
+### Tests And Documentation
+
+- **Compatibility tests:** JVM tests cover Wayland opaque-window detection, desktop locale resolution, browser-cookie import formatting/decryption, desktop WebView cookie handling, disabled embedded Google WebView behavior on desktop, and desktop mouse input helpers.
+- **Fork README:** this README front matter documents what the fork adds before preserving the upstream README below for general project background.
+
+## Local Linux Install Notes
+
+The currently installed local build is expected at:
+
+```text
+/opt/simpmusic-patched/SimpMusic
+/usr/local/bin/simpmusic
+```
+
+`/usr/local/bin/simpmusic` launches the patched build, preserves the hardware OpenGL path, keeps Skiko tied to the active monitor refresh rate, and passes the bundled VLC native path. The upstream/AUR package can still be kept separately for comparison or rollback.
+
+## Build Commands Used For This Fork
+
+```bash
+GRADLE_USER_HOME=/tmp/simpmusic-gradle-home ./gradlew :composeApp:jvmTest \
+  --tests com.maxrave.simpmusic.DesktopLocaleTest \
+  --tests com.maxrave.simpmusic.expect.BrowserCookieImporterTest \
+  --tests com.maxrave.simpmusic.expect.ui.DesktopWebViewCookieManagerTest \
+  --tests com.maxrave.simpmusic.expect.DesktopGoogleLoginWebViewTest \
+  --no-configuration-cache
+
+GRADLE_USER_HOME=/tmp/simpmusic-gradle-home ./gradlew :desktopApp:createDistributable --no-configuration-cache
+```
+
+## Upstream README
+
+The original upstream README is kept below for general project background. Upstream badges and download links may still point to `maxrave-dev/SimpMusic` release artifacts.
+
 <div align="center"> <img src="https://raw.githubusercontent.com/maxrave-dev/SimpMusic/main/fastlane/metadata/android/en-US/images/featureGraphic.png"> <h1>SimpMusic</h1>  
 A FOSS YouTube Music client for Android and Desktop with many features from<br>Spotify, SponsorBlock, ReturnYouTubeDislike using Compose Multiplatform to develop.
 <br> 

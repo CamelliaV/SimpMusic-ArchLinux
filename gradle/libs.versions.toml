@@ -87,6 +87,7 @@ commonsIo = "2.5"
 packagedeps = "0.2.5"
 conveyor = "2.0"
 vaqua = "13"
+javafx = "21.0.11"
 
 [libraries]
 desugaring = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugaring"}
