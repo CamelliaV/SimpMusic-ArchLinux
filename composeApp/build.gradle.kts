@@ -532,13 +532,12 @@ val vlcSetupWindowsArmCi by tasks.registering {
 
 val vlcSetupAll by tasks.registering {
     group = "vlc-multi"
-    description = "Cross-OS: populate vlc-natives/{linux-x64,macos-arm64,macos-x64,windows-x64,windows-arm64}/ from any host. Use in CI."
+    description = "Cross-OS: populate vlc-natives/{linux-x64,macos-arm64,macos-x64,windows-x64}/ from any host. Use in CI."
     dependsOn(
         vlcSetupLinuxCi,
         vlcSetupMacArmCi,
         vlcSetupMacX64Ci,
         vlcSetupWindowsX64Ci,
-        vlcSetupWindowsArmCi,
     )
 }
 
