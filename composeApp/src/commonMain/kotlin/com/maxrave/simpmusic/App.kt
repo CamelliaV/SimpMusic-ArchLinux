@@ -87,6 +87,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDestinatio
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistVideosDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.LocalPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
@@ -111,6 +112,7 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -183,6 +185,12 @@ fun App(viewModel: SharedViewModel = koinInject()) {
 
     LaunchedEffect(nowPlayingData) {
         isShowMiniPlayer = !(nowPlayingData?.mediaItem == null || nowPlayingData?.mediaItem == GenericMediaItem.EMPTY)
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.toggleNowPlayingPanelRequests.collectLatest {
+            isShowNowPlaylistScreen = !isShowNowPlaylistScreen
+        }
     }
 
     LaunchedEffect(intent) {
@@ -461,42 +469,87 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                         Box(
                             Modifier
                                 .fillMaxSize()
-                                .weight(1f)
-                                .dismissOnPrimaryClickAway(
-                                    enabled = isShowNowPlaylistScreen && isTabletLandscape && !isInFullscreen,
-                                ) {
-                                    isShowNowPlaylistScreen = false
-                                },
+                                .weight(1f),
                         ) {
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .then(
-                                        if (isLiquidGlassEnabled == TRUE && isTablet && !isInFullscreen) {
-                                            Modifier.layerBackdrop(backdrop)
-                                        } else {
-                                            Modifier
+                            Row(Modifier.fillMaxSize()) {
+                                Box(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .weight(1f)
+                                        .dismissOnPrimaryClickAway(
+                                            enabled = isShowNowPlaylistScreen && isTabletLandscape && !isInFullscreen,
+                                        ) {
+                                            isShowNowPlaylistScreen = false
                                         },
-                                    ).hazeSource(hazeState),
-                            ) {
-                                AppNavigationGraph(
-                                    innerPadding = innerPadding,
-                                    navController = navController,
-                                    hideNavBar = {
-                                        isNavBarVisible = false
-                                    },
-                                    showNavBar = {
-                                        isNavBarVisible = true
-                                    },
-                                    showNowPlayingSheet = {
-                                        isShowNowPlaylistScreen = true
-                                    },
-                                    onScrolling = {
-                                        isScrolledToTop = it
-                                    },
-                                )
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .fillMaxSize()
+                                            .then(
+                                                if (isLiquidGlassEnabled == TRUE && isTablet && !isInFullscreen) {
+                                                    Modifier.layerBackdrop(backdrop)
+                                                } else {
+                                                    Modifier
+                                                },
+                                            ).hazeSource(hazeState),
+                                    ) {
+                                        AppNavigationGraph(
+                                            innerPadding = innerPadding,
+                                            navController = navController,
+                                            hideNavBar = {
+                                                isNavBarVisible = false
+                                            },
+                                            showNavBar = {
+                                                isNavBarVisible = true
+                                            },
+                                            showNowPlayingSheet = {
+                                                isShowNowPlaylistScreen = true
+                                            },
+                                            onScrolling = {
+                                                isScrolledToTop = it
+                                            },
+                                        )
+                                    }
+                                }
+                                if (isTablet && isTabletLandscape && !isInFullscreen) {
+                                    AnimatedVisibility(
+                                        isShowNowPlaylistScreen,
+                                        enter = expandHorizontally() + fadeIn(),
+                                        exit = fadeOut() + shrinkHorizontally(),
+                                    ) {
+                                        Row(
+                                            Modifier
+                                                .fillMaxHeight()
+                                                .fillMaxWidth(0.35f)
+                                                .padding(bottom = if (isShowMiniPlayer) 84.dp else 0.dp),
+                                        ) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Box(
+                                                Modifier
+                                                    .padding(
+                                                        innerPadding.copy(
+                                                            start = 0.dp,
+                                                            top = 0.dp,
+                                                            bottom = 0.dp,
+                                                        ),
+                                                    ).clip(
+                                                        RoundedCornerShape(12.dp),
+                                                    ),
+                                            ) {
+                                                NowPlayingScreenContent(
+                                                    navController = navController,
+                                                    sharedViewModel = viewModel,
+                                                    isExpanded = true,
+                                                    dismissIcon = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                                                ) {
+                                                    isShowNowPlaylistScreen = false
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            this@Row.AnimatedVisibility(
+                            androidx.compose.animation.AnimatedVisibility(
                                 modifier =
                                     Modifier
                                         .padding(innerPadding)
@@ -533,42 +586,6 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                         viewModel.isServiceRunning = false
                                     },
                                 )
-                            }
-                        }
-                        if (isTablet && isTabletLandscape && !isInFullscreen) {
-                            AnimatedVisibility(
-                                isShowNowPlaylistScreen,
-                                enter = expandHorizontally() + fadeIn(),
-                                exit = fadeOut() + shrinkHorizontally(),
-                            ) {
-                                Row(
-                                    Modifier
-                                        .fillMaxHeight()
-                                        .fillMaxWidth(0.35f),
-                                ) {
-                                    Spacer(Modifier.width(8.dp))
-                                    Box(
-                                        Modifier
-                                            .padding(
-                                                innerPadding.copy(
-                                                    start = 0.dp,
-                                                    top = 0.dp,
-                                                    bottom = 0.dp,
-                                                ),
-                                            ).clip(
-                                                RoundedCornerShape(12.dp),
-                                            ),
-                                    ) {
-                                        NowPlayingScreenContent(
-                                            navController = navController,
-                                            sharedViewModel = viewModel,
-                                            isExpanded = true,
-                                            dismissIcon = Icons.AutoMirrored.Rounded.ArrowForwardIos,
-                                        ) {
-                                            isShowNowPlaylistScreen = false
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
@@ -814,6 +831,7 @@ private fun NavBackStackEntry.toDesktopMouseNavigationDestination(): Any? =
         hasDesktopMouseNavigationRoute<LibraryDynamicPlaylistDestination>() -> runCatching { toRoute<LibraryDynamicPlaylistDestination>() }.getOrNull()
         hasDesktopMouseNavigationRoute<AlbumDestination>() -> runCatching { toRoute<AlbumDestination>() }.getOrNull()
         hasDesktopMouseNavigationRoute<ArtistDestination>() -> runCatching { toRoute<ArtistDestination>() }.getOrNull()
+        hasDesktopMouseNavigationRoute<ArtistVideosDestination>() -> runCatching { toRoute<ArtistVideosDestination>() }.getOrNull()
         hasDesktopMouseNavigationRoute<LocalPlaylistDestination>() -> runCatching { toRoute<LocalPlaylistDestination>() }.getOrNull()
         hasDesktopMouseNavigationRoute<MoreAlbumsDestination>() -> runCatching { toRoute<MoreAlbumsDestination>() }.getOrNull()
         hasDesktopMouseNavigationRoute<PlaylistDestination>() -> runCatching { toRoute<PlaylistDestination>() }.getOrNull()

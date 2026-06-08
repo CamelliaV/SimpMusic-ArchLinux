@@ -106,7 +106,6 @@ import com.maxrave.domain.utils.LocalResource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.canImportYouTubeCookiesFromBrowser
-import com.maxrave.simpmusic.expect.importYouTubeCookiesFromBrowser
 import com.maxrave.simpmusic.expect.ui.fileSaverResult
 import com.maxrave.simpmusic.expect.ui.openEqResult
 import com.maxrave.simpmusic.extension.bytesToMB
@@ -128,6 +127,7 @@ import com.maxrave.simpmusic.ui.theme.md_theme_dark_primary
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.ui.theme.white
 import com.maxrave.simpmusic.utils.VersionManager
+import com.maxrave.simpmusic.viewModel.BrowserCookieAccountImportResult
 import com.maxrave.simpmusic.viewModel.SettingAlertState
 import com.maxrave.simpmusic.viewModel.SettingBasicAlertState
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
@@ -224,6 +224,7 @@ import simpmusic.composeapp.generated.resources.developer_blog_tagline
 import simpmusic.composeapp.generated.resources.desktop_google_login_browser_import_failed
 import simpmusic.composeapp.generated.resources.desktop_google_login_description
 import simpmusic.composeapp.generated.resources.desktop_google_login_import_browser
+import simpmusic.composeapp.generated.resources.desktop_google_login_imported_from
 import simpmusic.composeapp.generated.resources.desktop_google_login_importing
 import simpmusic.composeapp.generated.resources.desktop_font_family
 import simpmusic.composeapp.generated.resources.desktop_ui_scale
@@ -286,6 +287,8 @@ import simpmusic.composeapp.generated.resources.openai_api_compatible
 import simpmusic.composeapp.generated.resources.other_app
 import simpmusic.composeapp.generated.resources.play_explicit_content
 import simpmusic.composeapp.generated.resources.play_explicit_content_description
+import simpmusic.composeapp.generated.resources.play_video_for_youtube_fallback_tracks
+import simpmusic.composeapp.generated.resources.play_video_for_youtube_fallback_tracks_description
 import simpmusic.composeapp.generated.resources.play_video_for_video_track_instead_of_audio_only
 import simpmusic.composeapp.generated.resources.playback
 import simpmusic.composeapp.generated.resources.player_cache
@@ -421,6 +424,7 @@ fun SettingScreen(
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val combineLocalAndYouTubeLiked by viewModel.combineLocalAndYouTubeLiked.collectAsStateWithLifecycle()
     val playVideo by viewModel.playVideoInsteadOfAudio.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = false)
+    val playYouTubeFallbackVideo by viewModel.playYouTubeFallbackVideo.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = false)
     val videoQuality by viewModel.videoQuality.collectAsStateWithLifecycle()
     val sendData by viewModel.sendBackToGoogle.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = false)
     val normalizeVolume by viewModel.normalizeVolume.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = false)
@@ -517,20 +521,28 @@ fun SettingScreen(
             browserCookieImporting = true
             viewModel.makeToast(getString(Res.string.desktop_google_login_importing))
             try {
-                val importedCookies = importYouTubeCookiesFromBrowser()
-                val success =
-                    viewModel.addAccount(
-                        importedCookies.cookieHeader,
-                        importedCookies.netscapeCookie,
-                    )
-                if (success) {
-                    viewModel.makeToast(getString(Res.string.login_success))
-                    viewModel.getAllGoogleAccount()
-                    if (closeDialogOnSuccess) {
-                        showYouTubeAccountDialog = false
+                when (val result = viewModel.importBrowserCookiesAndAddAccount()) {
+                    is BrowserCookieAccountImportResult.Success -> {
+                        viewModel.makeToast(
+                            getString(
+                                Res.string.desktop_google_login_imported_from,
+                                result.sourceDescription,
+                            ),
+                        )
+                        viewModel.getAllGoogleAccount()
+                        if (closeDialogOnSuccess) {
+                            showYouTubeAccountDialog = false
+                        }
                     }
-                } else {
-                    viewModel.makeToast(getString(Res.string.login_failed))
+
+                    is BrowserCookieAccountImportResult.Failure -> {
+                        Logger.e("SettingScreen", "Browser cookie import failed: ${result.message}")
+                        viewModel.makeToast(getString(Res.string.login_failed))
+                    }
+
+                    BrowserCookieAccountImportResult.Unsupported -> {
+                        viewModel.makeToast(getString(Res.string.desktop_google_login_browser_import_failed))
+                    }
                 }
             } catch (error: Exception) {
                 Logger.e("SettingScreen", "Browser cookie import failed: ${error.message}")
@@ -795,6 +807,12 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.such_as_music_video_lyrics_video_podcasts_and_more),
                     smallSubtitle = true,
                     switch = (playVideo to { viewModel.setPlayVideoInsteadOfAudio(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.play_video_for_youtube_fallback_tracks),
+                    subtitle = stringResource(Res.string.play_video_for_youtube_fallback_tracks_description),
+                    smallSubtitle = true,
+                    switch = (playYouTubeFallbackVideo to { viewModel.setPlayYouTubeFallbackVideo(it) }),
                 )
                 SettingItem(
                     title = stringResource(Res.string.video_quality),

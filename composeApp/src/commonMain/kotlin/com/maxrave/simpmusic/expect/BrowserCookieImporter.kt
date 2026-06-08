@@ -15,3 +15,5 @@ class BrowserCookieImportException(
 expect fun canImportYouTubeCookiesFromBrowser(): Boolean
 
 expect suspend fun importYouTubeCookiesFromBrowser(): ImportedYouTubeCookies
+
+expect suspend fun importYouTubeCookieCandidatesFromBrowser(): List<ImportedYouTubeCookies>

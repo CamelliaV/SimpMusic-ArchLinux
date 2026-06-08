@@ -37,6 +37,7 @@ import simpmusic.composeapp.generated.resources.view_count
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
     private val homeRepository: HomeRepository,
+    private val youTubeAccountManager: YouTubeAccountManager,
 ) : BaseViewModel() {
     private val _homeItemList: MutableStateFlow<List<HomeItem>> =
         MutableStateFlow(arrayListOf())
@@ -54,6 +55,7 @@ class HomeViewModel(
     val accountInfo: StateFlow<Pair<String?, String?>?> = _accountInfo
 
     private var homeJob: Job? = null
+    private var browserCookieRepairAttempted = false
 
     val showSnackBarErrorState = MutableSharedFlow<String>()
 
@@ -87,13 +89,11 @@ class HomeViewModel(
     val mainHomeThumbnail: StateFlow<String?> = _mainHomeThumbnail
 
     init {
-        if (runBlocking { dataStoreManager.cookie.first() }.isEmpty() &&
+        val shouldShowLoginAlert =
             runBlocking {
                 dataStoreManager.shouldShowLogInRequiredAlert.first() == TRUE
             }
-        ) {
-            _showLogInAlert.update { true }
-        }
+        startInitialCookieRepairIfNeeded(shouldShowLoginAlert)
         homeJob = Job()
         viewModelScope.launch {
             regionCodeChart.value = dataStoreManager.chartKey.first()
@@ -176,6 +176,47 @@ class HomeViewModel(
             if (neverShowAgain) {
                 dataStoreManager.setShouldShowLogInRequiredAlert(false)
             }
+        }
+    }
+
+    private fun startInitialCookieRepairIfNeeded(shouldShowLoginAlert: Boolean) {
+        viewModelScope.launch {
+            val cookie = dataStoreManager.cookie.first()
+            if (cookie.isBlank()) {
+                val repaired = repairYouTubeCookie("missing cookie")
+                if (!repaired && shouldShowLoginAlert) {
+                    _showLogInAlert.update { true }
+                }
+            } else {
+                validateStoredCookieOrRepair()
+            }
+        }
+    }
+
+    private suspend fun validateStoredCookieOrRepair() {
+        if (!youTubeAccountManager.storedCookieHasAccountInfo()) {
+            repairYouTubeCookie("stored cookie did not return account info")
+        }
+    }
+
+    private suspend fun repairYouTubeCookie(reason: String): Boolean {
+        if (browserCookieRepairAttempted) return false
+        browserCookieRepairAttempted = true
+        Logger.w(tag, "Trying browser cookie import because $reason")
+        return when (val result = youTubeAccountManager.importBrowserCookiesAndAddAccount()) {
+            is BrowserCookieAccountImportResult.Success -> {
+                _showLogInAlert.update { false }
+                makeToast("Imported YouTube login from ${result.sourceDescription}")
+                true
+            }
+
+            is BrowserCookieAccountImportResult.Failure -> {
+                Logger.w(tag, "Browser cookie import failed: ${result.message}")
+                makeToast("Browser cookie import failed: ${result.message}")
+                false
+            }
+
+            BrowserCookieAccountImportResult.Unsupported -> false
         }
     }
 

@@ -30,6 +30,7 @@ import com.maxrave.domain.data.model.update.UpdateData
 import com.maxrave.domain.extension.decodeHtmlEntities
 import com.maxrave.domain.extension.isSong
 import com.maxrave.domain.extension.isVideo
+import com.maxrave.domain.extension.shouldShowPlaybackVideo
 import com.maxrave.domain.extension.toGenericMediaItem
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.FALSE
@@ -69,6 +70,7 @@ import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -77,6 +79,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
@@ -125,6 +128,9 @@ class SharedViewModel(
 
     private var _liked: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val liked: SharedFlow<Boolean> = _liked.asSharedFlow()
+
+    private val _toggleNowPlayingPanelRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val toggleNowPlayingPanelRequests: SharedFlow<Unit> = _toggleNowPlayingPanelRequests.asSharedFlow()
 
     var isServiceRunning: Boolean = false
 
@@ -252,10 +258,30 @@ class SharedViewModel(
                 }
             val checkGetVideoJob =
                 launch {
-                    dataStoreManager.watchVideoInsteadOfPlayingAudio.collectLatest {
-                        Logger.w(tag, "GetVideo is $it")
-                        _getVideo.value = it == TRUE
-                    }
+                    combine(
+                        dataStoreManager.watchVideoInsteadOfPlayingAudio,
+                        dataStoreManager.playYouTubeFallbackVideo,
+                        nowPlayingState,
+                    ) { watchVideoInsteadOfPlayingAudio, playYouTubeFallbackVideo, nowPlayingState ->
+                        val mediaItem = nowPlayingState?.mediaItem
+                        val shouldShowPlaybackVideo =
+                            mediaItem?.shouldShowPlaybackVideo(
+                                watchVideoInsteadOfPlayingAudio = watchVideoInsteadOfPlayingAudio == TRUE,
+                                playYouTubeFallbackVideo = playYouTubeFallbackVideo == TRUE,
+                            ) == true
+                        Logger.w(
+                            tag,
+                            "GetVideo is $shouldShowPlaybackVideo " +
+                                "videoId=${mediaItem?.mediaId ?: ""} " +
+                                "description=${mediaItem?.metadata?.description ?: ""} " +
+                                "watchVideoInsteadOfPlayingAudio=${watchVideoInsteadOfPlayingAudio == TRUE} " +
+                                "playYouTubeFallbackVideo=${playYouTubeFallbackVideo == TRUE}",
+                        )
+                        shouldShowPlaybackVideo
+                    }.distinctUntilChanged()
+                        .collectLatest { shouldShowPlaybackVideo ->
+                            _getVideo.value = shouldShowPlaybackVideo
+                        }
                 }
             val lyricsProviderJob =
                 launch {
@@ -463,6 +489,10 @@ class SharedViewModel(
 
     fun setIntent(intent: GenericIntent?) {
         _intent.value = intent
+    }
+
+    fun requestToggleNowPlayingPanel() {
+        _toggleNowPlayingPanelRequests.tryEmit(Unit)
     }
 
     fun showNotificationPermissionDialog() {

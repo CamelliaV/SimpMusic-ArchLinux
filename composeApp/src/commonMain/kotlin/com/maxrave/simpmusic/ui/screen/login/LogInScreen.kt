@@ -41,7 +41,6 @@ import androidx.navigation.NavController
 import com.maxrave.common.Config
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.expect.canImportYouTubeCookiesFromBrowser
-import com.maxrave.simpmusic.expect.importYouTubeCookiesFromBrowser
 import com.maxrave.simpmusic.expect.openUrl
 import com.maxrave.simpmusic.expect.useEmbeddedGoogleLoginWebView
 import com.maxrave.simpmusic.expect.ui.PlatformWebView
@@ -51,6 +50,7 @@ import com.maxrave.simpmusic.ui.component.DevLogInBottomSheet
 import com.maxrave.simpmusic.ui.component.DevLogInType
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.viewModel.BrowserCookieAccountImportResult
 import com.maxrave.simpmusic.viewModel.LogInViewModel
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
 import dev.chrisbanes.haze.hazeEffect
@@ -202,24 +202,32 @@ fun LoginScreen(
                             browserCookieImporting = true
                             browserCookieImportStatus = getString(Res.string.desktop_google_login_importing)
                             runCatching {
-                                importYouTubeCookiesFromBrowser()
-                            }.onSuccess { importedCookies ->
-                                desktopCookie = importedCookies.cookieHeader
-                                browserCookieImportStatus =
-                                    getString(
-                                        Res.string.desktop_google_login_imported_from,
-                                        importedCookies.sourceDescription,
-                                    )
-                                val success =
-                                    settingsViewModel.addAccount(
-                                        importedCookies.cookieHeader,
-                                        importedCookies.netscapeCookie,
-                                    )
-                                if (success) {
-                                    viewModel.makeToast(getString(Res.string.login_success))
-                                    navController.navigateUp()
-                                } else {
-                                    viewModel.makeToast(getString(Res.string.login_failed))
+                                settingsViewModel.importBrowserCookiesAndAddAccount()
+                            }.onSuccess { result ->
+                                when (result) {
+                                    is BrowserCookieAccountImportResult.Success -> {
+                                        desktopCookie = ""
+                                        browserCookieImportStatus =
+                                            getString(
+                                                Res.string.desktop_google_login_imported_from,
+                                                result.sourceDescription,
+                                            )
+                                        viewModel.makeToast(getString(Res.string.login_success))
+                                        navController.navigateUp()
+                                    }
+
+                                    is BrowserCookieAccountImportResult.Failure -> {
+                                        browserCookieImportStatus =
+                                            getString(Res.string.desktop_google_login_browser_import_failed)
+                                        Logger.e("LogInScreen", "Browser cookie import failed: ${result.message}")
+                                        viewModel.makeToast(getString(Res.string.login_failed))
+                                    }
+
+                                    BrowserCookieAccountImportResult.Unsupported -> {
+                                        browserCookieImportStatus =
+                                            getString(Res.string.desktop_google_login_browser_import_failed)
+                                        viewModel.makeToast(getString(Res.string.desktop_google_login_browser_import_failed))
+                                    }
                                 }
                             }.onFailure { error ->
                                 Logger.e("LogInScreen", "Browser cookie import failed: ${error.message}")

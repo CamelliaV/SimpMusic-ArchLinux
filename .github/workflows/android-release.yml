@@ -2,9 +2,21 @@ name: Build APK for Release (Full & FOSS) && Desktop app release
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Create or update the GitHub Release after building artifacts'
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release tag to publish, for example v1.3.0. Defaults to v<version-name>.'
+        required: false
+        type: string
   push:
     branches:
       - 'main'
+    tags:
+      - 'v*'
     paths-ignore:
       - 'README.md'
       - 'fastlane/**'
@@ -146,6 +158,24 @@ jobs:
           echo "" >> ./gradle.properties
           echo "isFullBuild=true" >> ./gradle.properties
 
+      - name: Resolve app version and release tag
+        id: version
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          VERSION=$(grep '^version-name' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          elif [[ -n "${INPUT_RELEASE_TAG}" ]]; then
+            RELEASE_TAG="${INPUT_RELEASE_TAG}"
+          else
+            RELEASE_TAG="v${VERSION}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "App version: $VERSION"
+          echo "Release tag: $RELEASE_TAG"
+
       - name: Update Sentry Secrets
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN_JVM }}
@@ -182,6 +212,22 @@ jobs:
           agree_to_license: 1
           signing_key: ${{ secrets.CONVEYOR_SIGNING_KEY }}
 
+      - name: Bundle Linux app tree for Arch PKGBUILD
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p installers linux-release/SimpMusic-linux-x86_64
+          cp -a output/. linux-release/SimpMusic-linux-x86_64/
+          tar -czf installers/SimpMusic-linux-x86_64.tar.gz \
+            -C linux-release SimpMusic-linux-x86_64
+          sha256=$(sha256sum installers/SimpMusic-linux-x86_64.tar.gz | awk '{print $1}')
+          packaging/arch/render-pkgbuild.sh "$VERSION" "$sha256" \
+            "SimpMusic-linux-x86_64.tar.gz" "$RELEASE_TAG" \
+            > installers/PKGBUILD
+          ls -lh installers/SimpMusic-linux-x86_64.tar.gz installers/PKGBUILD
+
       - name: Wrap Linux app tree → AppImage
         run: ./gradlew :desktopApp:packageConveyorAppImage --no-configuration-cache
 
@@ -216,6 +262,18 @@ jobs:
         with:
           name: desktop-appimage
           path: output/SimpMusic-*.AppImage
+
+      - name: Upload Linux tarball for Arch package
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux-tarball
+          path: installers/SimpMusic-linux-x86_64.tar.gz
+
+      - name: Upload Arch PKGBUILD
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-pkgbuild
+          path: installers/PKGBUILD
 
       - name: Upload macOS zips to run artifacts
         uses: actions/upload-artifact@v4
@@ -328,3 +386,128 @@ jobs:
         with:
           name: desktop-mac-dmg
           path: dist/*.dmg
+
+  publish-release:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    needs:
+      - build-full-release
+      - build-foss-release
+      - build-desktop-packages
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve release tag
+        id: release
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version-name' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          elif [[ -n "${INPUT_RELEASE_TAG}" ]]; then
+            TAG="${INPUT_RELEASE_TAG}"
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+
+      - name: Download Android full APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-full-release
+          path: release-assets/android-full
+
+      - name: Download Android FOSS APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-foss-release
+          path: release-assets/android-foss
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows
+          path: release-assets/windows
+
+      - name: Download Linux tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-linux-tarball
+          path: release-assets/arch
+
+      - name: Download Arch PKGBUILD
+        uses: actions/download-artifact@v4
+        with:
+          name: arch-pkgbuild
+          path: release-assets/arch
+
+      - name: Prepare release notes
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          SimpMusic CamelliaV fork ${VERSION}
+
+          Main fork changes:
+
+          - YouTube video-as-music fallback for playable YouTube videos that YouTube Music marks unavailable or not-music.
+          - Podcast-friendly fallback playback where regular YouTube extraction is the better source.
+          - Optional in-app video rendering in the now-playing cover-art area.
+          - Desktop browser-cookie YouTube login/import support.
+          - Arch/KDE/Wayland/NVIDIA desktop runtime fixes, bundled VLC lookup, and desktop shortcuts.
+
+          Assets:
+
+          - Android Full APK
+          - Android FOSS APK
+          - SimpMusic-Windows-installer.zip
+          - PKGBUILD
+          - SimpMusic-linux-x86_64.tar.gz
+
+          Arch Linux:
+
+          \`\`\`bash
+          mkdir simpmusic-camelliav
+          cd simpmusic-camelliav
+          curl -LO https://github.com/CamelliaV/SimpMusic/releases/download/${TAG}/PKGBUILD
+          makepkg -si
+          \`\`\`
+          EOF
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(find release-assets -type f -print | sort)
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "::error::No release assets found"
+            exit 1
+          fi
+          printf 'Release assets:\n'
+          printf '  %s\n' "${assets[@]}"
+
+          title="SimpMusic ${VERSION} CamelliaV fork"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --clobber
+            gh release edit "$TAG" --title "$title" --notes-file release-notes.md
+          else
+            gh release create "$TAG" "${assets[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes-file release-notes.md
+          fi

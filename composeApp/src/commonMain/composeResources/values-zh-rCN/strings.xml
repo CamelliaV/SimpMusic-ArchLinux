@@ -278,6 +278,8 @@
     <string name="audio_quality">音质</string>
     <string name="play_video_for_video_track_instead_of_audio_only">播放视频播放音轨而非只音频</string>
     <string name="such_as_music_video_lyrics_video_podcasts_and_more">例如音乐视频、歌词视频、播客等更多</string>
+    <string name="play_video_for_youtube_fallback_tracks">为 YouTube 视频音乐播放视频</string>
+    <string name="play_video_for_youtube_fallback_tracks_description">适用于作为音乐播放的 YouTube 视频和回退条目，画质使用视频质量设置。</string>
     <string name="video_quality">视频质量</string>
     <plurals name="n_song">
         <item quantity="other">%d 首歌曲</item>

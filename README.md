@@ -1,10 +1,90 @@
-# SimpMusic - CamelliaV Desktop Fork
+# SimpMusic - CamelliaV Fork
 
-This repository is a desktop-focused fork of [maxrave-dev/SimpMusic](https://github.com/maxrave-dev/SimpMusic). It keeps the upstream Android and Desktop feature set, then adds Linux desktop fixes and workflow improvements aimed at making SimpMusic usable as a daily desktop music client on KDE Wayland + NVIDIA.
+This fork keeps the upstream [maxrave-dev/SimpMusic](https://github.com/maxrave-dev/SimpMusic) Android and Desktop app, then adds the pieces needed for a practical daily client on Linux desktop and for YouTube content that YouTube Music misclassifies or refuses to play.
 
-The main fork goal is practical desktop behavior: hardware-rendered startup, automatic browser-cookie login, readable desktop scaling/fonts, mouse navigation, and local packaging that works on the target machine without falling back to software rendering.
+The main fork changes are feature-level changes, not only local patches:
 
-## Fork Desktop Screenshots
+- Play regular YouTube videos as music when YouTube Music says the item is not music or marks it unavailable.
+- Recover metadata, thumbnails, queue behavior, and playback for those fallback video entries inside SimpMusic playlists and artist video lists.
+- Optionally show the fallback video's picture inside the now-playing cover-art area, using the existing video-quality setting. This is off by default.
+- Import logged-in YouTube cookies from Chromium-based browsers and reuse them for both app login state and YouTube extraction.
+- Make the desktop app usable on Arch/KDE/Wayland/NVIDIA with hardware OpenGL rendering, bundled VLC lookup, sane scaling/fonts, mouse navigation, and global playback shortcuts.
+- Prepare reusable release packaging for Android APKs, a Windows offline installer, and Arch Linux installation through a generated release PKGBUILD.
+
+## Fork Highlights
+
+### YouTube Video-As-Music Fallback
+
+YouTube Music can reject playable YouTube uploads simply because they are not tagged as music. This fork treats those entries as playable music candidates:
+
+- Playlist entries that YouTube Music greys out can be mapped into normal SimpMusic songs with title, channel/artist, thumbnail, duration, queue position, and cached playback metadata.
+- Playback falls back to regular YouTube stream extraction and uses muxed video streams when that is the reliable audio-capable source.
+- Some podcast entries can play directly in SimpMusic instead of forcing a jump to YouTube video playback.
+- Startup restore handles these fallback tracks, so the last playing fallback item can resume with the right metadata and video state.
+
+When inline video playback is enabled in Settings, the video renders in the same area normally used by the now-playing cover image. When disabled, the app behaves like an audio player and keeps the artwork-first layout.
+
+<p align="center">
+  <img src="asset/screenshot/fork-youtube-video-music-playback.png" alt="SimpMusic fork playing a YouTube video playlist item as music" width="900" />
+</p>
+
+For comparison, YouTube Music marks the same kind of video playlist entries as unavailable:
+
+<p align="center">
+  <img src="asset/screenshot/youtube-music-video-unplayable-reference.png" alt="YouTube Music showing video playlist entries as unavailable" width="900" />
+</p>
+
+### YouTube Login And Cookies
+
+The desktop login flow can import YouTube cookies from an already signed-in Chromium-based browser, similar in purpose to `yt-dlp --cookies-from-browser`.
+
+- Browser cookies are copied from the browser database before reading, so locked profile databases do not block import.
+- Chromium `v10` and `v11` encrypted cookies are handled on Linux.
+- KDE KWallet-backed Chromium profiles can be read through `kwallet-query`.
+- Imported cookies are persisted both as SimpMusic account cookies and as a Netscape-format `ytdlp-cookie.txt` for the YouTube extractor path.
+- If the app detects that YouTube login state has fallen away, the fork can try browser-cookie import again and report failure instead of silently leaving playback broken.
+
+### Desktop Playback And Navigation
+
+The fork adds desktop controls that are expected from a local music player:
+
+- `Ctrl+Alt+P` toggles playback globally.
+- `Ctrl+Alt+Left` and `Ctrl+Alt+Right` switch tracks globally.
+- `Space` toggles playback when the app window is focused.
+- `Left` and `Right` seek inside the focused player.
+- `Ctrl+S` toggles the right now-playing panel.
+- Mouse side buttons map to back/forward navigation.
+- Middle-button horizontal drag works on supported desktop lists; on Linux the fork can read evdev mouse events when Wayland/Compose/AWT do not deliver them reliably.
+- Expanded mini-player content can be dismissed by clicking outside it without changing the mini-player placement behavior.
+
+### Artist Videos And Metadata
+
+Artist pages expose a video-list path for "more videos" style navigation. The fallback path fixes empty response and missing-image cases by mapping YouTube video results into displayable SimpMusic list items before playback is attempted.
+
+### Linux Desktop Runtime
+
+The desktop runtime changes are aimed at Arch/KDE/Wayland/NVIDIA, while still keeping the app usable on other Linux desktops:
+
+- Wayland windows use an opaque decorated Compose path to avoid the black-window failure from transparent undecorated Skiko windows.
+- The launcher keeps hardware OpenGL enabled through `SKIKO_RENDER_API=OPENGL` and related Skiko flags instead of falling back to software rendering.
+- High-refresh monitors keep Skiko vsync and refresh-rate fallback enabled instead of being pinned to a static 60 fps launcher setting.
+- Desktop playback resolves VLC from `vlc.bundled.path` and packaged `lib/app/vlc`.
+- Packaged Linux startup can bypass the crashing native jpackage launcher and start the same packaged classpath through Java directly.
+- Desktop builds default to 150% UI scale, expose a Settings control for scale, and include a desktop font selector with Noto Sans / Noto Sans SC resources.
+- Desktop locale follows `LC_MESSAGES` or KDE Plasma's `plasma-localerc` before falling back to JVM locale when the user has not manually selected a language.
+- Update reminders are optional and default off in this fork.
+
+### Release Packaging
+
+The release target for this fork is:
+
+- **Android:** signed Full and FOSS APKs.
+- **Windows:** `SimpMusic-Windows-installer.zip`, containing `install.bat`, the signing certificate, and the x64 `.msix` for offline installation.
+- **Arch Linux:** release asset `PKGBUILD` plus `SimpMusic-linux-x86_64.tar.gz`; users can install with `makepkg -si`.
+
+The Arch package renderer lives in [packaging/arch/render-pkgbuild.sh](packaging/arch/render-pkgbuild.sh). The release workflow generates a versioned `PKGBUILD` with the Linux tarball checksum.
+
+## Screenshots
 
 <p align="center">
   <img src="asset/screenshot/fork-desktop-home.png" alt="SimpMusic desktop home on KDE Wayland" width="900" />
@@ -15,44 +95,11 @@ The main fork goal is practical desktop behavior: hardware-rendered startup, aut
   <img src="asset/screenshot/fork-desktop-settings-font.png" alt="Desktop font selector in Settings" width="440" />
 </p>
 
-## What This Fork Adds
+## Tests And Documentation
 
-### Linux Desktop Runtime
+- JVM tests cover Wayland opaque-window detection, desktop locale resolution, browser-cookie import formatting/decryption, desktop WebView cookie handling, disabled embedded Google WebView behavior on desktop, desktop mouse input helpers, fallback video normalization, fallback video display decisions, and desktop shortcut mapping.
 
-- **Wayland + NVIDIA hardware rendering fix:** Linux Wayland windows use an opaque decorated Compose window path to avoid the black-window failure from the transparent + undecorated Skiko window path. The app still runs through hardware OpenGL instead of Skiko software rendering.
-- **Hardware-first launcher:** the local launcher forces the OpenGL/NVIDIA path with `SKIKO_RENDER_API=OPENGL`, `skiko.renderApi=OPENGL`, NVIDIA GLX selection, and Skiko vsync/frame-limiter flags. The fork intentionally does not keep a software-rendering launcher variant.
-- **High-refresh display support:** the launcher keeps Skiko vsync and refresh-rate fallback enabled so 165 Hz / 240 Hz desktop displays are not intentionally capped by a static 60 fps launcher setting.
-- **Bundled VLC native lookup:** desktop playback can resolve VLC from `vlc.bundled.path` and from the packaged app's `lib/app/vlc` directory. The launcher passes the bundled path explicitly.
-- **Java-direct packaged startup:** the local launcher starts the packaged jars through Java directly, avoiding the local jpackage native launcher crash while keeping the same app bundle.
-
-### Desktop YouTube Login
-
-- **One-click browser-cookie login:** the desktop Google login flow can import YouTube cookies from an already signed-in Chromium-based browser, similar in purpose to `yt-dlp --cookies-from-browser`.
-- **Linux Chromium cookie decryption:** the importer copies browser cookie databases before reading them, handles Chromium `v10`/`v11` encrypted cookie values, and can use `kwallet-query` when Chromium stores its Safe Storage key in KDE KWallet.
-- **Dual cookie persistence:** imported cookies are stored both as SimpMusic account cookies and as a Netscape-format `ytdlp-cookie.txt` file for the existing YouTube extractor path.
-- **Fork-specific login UI:** browser-cookie import is exposed on the desktop login screen, the Settings content page, and the YouTube account dialog. The UI labels mark this as a fork-only feature.
-- **Desktop WebView fallback:** desktop WebView screens use JavaFX WebView through Compose `SwingPanel`, with desktop cookie handling and Discord token extraction support.
-
-### Desktop UX Improvements
-
-- **150% default desktop scale:** desktop builds default to 150% UI scale and include a Settings control for changing it. The scale is persisted and applied to both the main window and mini-player.
-- **Selectable desktop font:** Settings include a desktop font selector. The fork includes Noto Sans and Noto Sans SC resources and keeps a system-font option.
-- **Sharper desktop text:** AWT/Swing text antialiasing is enabled and the Poppins font-weight mapping is corrected so regular, medium, semibold, and bold text render through the expected font files.
-- **Desktop locale detection:** if the user has not manually selected a language, the desktop app follows `LC_MESSAGES` or KDE Plasma's `plasma-localerc` before falling back to the JVM locale.
-- **Settings access from the desktop sidebar:** the left navigation area exposes Settings near the top so desktop users can jump there from the main layout and return through normal navigation.
-
-### Desktop Mouse Behavior
-
-- **Middle-button horizontal drag:** horizontal content can be moved by holding the middle mouse button and dragging over supported areas. On Linux this fork can read evdev mouse events directly when Wayland/Compose/AWT do not deliver the needed events reliably.
-- **Mouse side buttons:** side buttons map to browser-style back/forward navigation in the desktop app.
-- **Mini-player panel dismissal:** expanded mini-player content can be dismissed by clicking outside it while preserving the intended mini-player placement behavior.
-
-### Tests And Documentation
-
-- **Compatibility tests:** JVM tests cover Wayland opaque-window detection, desktop locale resolution, browser-cookie import formatting/decryption, desktop WebView cookie handling, disabled embedded Google WebView behavior on desktop, and desktop mouse input helpers.
-- **Fork README:** this README front matter documents what the fork adds before preserving the upstream README below for general project background.
-
-## Local Linux Install Notes
+## Local Linux Notes
 
 The currently installed local build is expected at:
 
@@ -63,7 +110,7 @@ The currently installed local build is expected at:
 
 `/usr/local/bin/simpmusic` launches the patched build, preserves the hardware OpenGL path, keeps Skiko tied to the active monitor refresh rate, and passes the bundled VLC native path. The upstream/AUR package can still be kept separately for comparison or rollback.
 
-## Build Commands Used For This Fork
+## Useful Local Verification Commands
 
 ```bash
 GRADLE_USER_HOME=/tmp/simpmusic-gradle-home ./gradlew :composeApp:jvmTest \

@@ -1105,20 +1105,20 @@ fun NowPlayingScreenContent(
                                                     .fillMaxWidth()
                                                     .background(Color.Transparent)
                                                     .aspectRatio(
-                                                        if (!screenDataState.isVideo) 1f else 16f / 9,
+                                                        if (shouldShowVideo) 16f / 9 else 1f,
                                                     ).clip(
                                                         RoundedCornerShape(8.dp),
                                                     ).alpha(
-                                                        if (!screenDataState.isVideo || !shouldShowVideo) 1f else 0f,
+                                                        if (shouldShowVideo) 0f else 1f,
                                                     ),
                                         )
                                     }
 
-                                    // Inline video player (current page + isVideo + shouldShowVideo).
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = screenDataState.isVideo && shouldShowVideo,
-                                        modifier = Modifier.align(Alignment.Center),
-                                    ) {
+                                    // Inline video player. Fallback video tracks are still audio-first,
+                                    // so the visibility comes from shouldShowVideo rather than isVideo.
+                                    // Compose Desktop SwingPanel needs a stable non-zero size; avoid
+                                    // animation wrappers here or the embedded AWT video can render black.
+                                    if (shouldShowVideo) {
                                         var internalShowSubtitle by rememberSaveable {
                                             mutableStateOf(true)
                                         }
@@ -1133,7 +1133,7 @@ fun NowPlayingScreenContent(
                                             Box(Modifier.fillMaxSize()) {
                                                 MediaPlayerViewWithSubtitle(
                                                     playerName = MAIN_PLAYER,
-                                                    modifier = Modifier.align(Alignment.Center),
+                                                    modifier = Modifier.fillMaxSize(),
                                                     shouldShowSubtitle = internalShowSubtitle,
                                                     shouldPip = false,
                                                     shouldScaleDownSubtitle = true,

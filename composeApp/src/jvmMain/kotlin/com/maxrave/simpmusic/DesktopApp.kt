@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -163,6 +164,16 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     }
 
     application {
+        DisposableEffect(sharedViewModel) {
+            val globalHotkeyRegistration =
+                DesktopGlobalPlaybackHotkey.install { action ->
+                    sharedViewModel.onUIEvent(action.toUIEvent())
+                }
+            onDispose {
+                globalHotkeyRegistration.close()
+            }
+        }
+
         val desktopUiScale by dataStoreManager.desktopUiScale.collectAsState(DesktopUiScale.DEFAULT)
         val desktopFontFamily by dataStoreManager.desktopFontFamily.collectAsState(DesktopFontFamily.DEFAULT)
         // Main Window
@@ -237,7 +248,20 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
             transparent = !requiresOpaqueWindow,
             state = windowState,
             visible = isVisible,
+            onKeyEvent = { keyEvent ->
+                dispatchDesktopPlaybackShortcut(keyEvent, sharedViewModel)
+            },
         ) {
+            DisposableEffect(window, sharedViewModel) {
+                val windowHotkeys =
+                    DesktopWindowPlaybackHotkeys.install(
+                        window = window,
+                        sharedViewModel = sharedViewModel,
+                    )
+                onDispose {
+                    windowHotkeys.close()
+                }
+            }
             InstallDesktopMiddleMouseHorizontalDragDispatcher(uiScale = normalizedDesktopUiScale)
             val baseDensity = LocalDensity.current
             val scaledDensity =

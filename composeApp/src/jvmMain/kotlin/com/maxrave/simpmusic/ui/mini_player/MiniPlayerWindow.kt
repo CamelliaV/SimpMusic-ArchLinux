@@ -2,16 +2,13 @@ package com.maxrave.simpmusic.ui.mini_player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
@@ -23,10 +20,11 @@ import androidx.compose.ui.window.WindowState
 import com.maxrave.domain.manager.DesktopFontFamily
 import com.maxrave.domain.manager.DesktopUiScale
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.DesktopWindowPlaybackHotkeys
 import com.maxrave.simpmusic.DesktopWindowCompatibility
+import com.maxrave.simpmusic.dispatchDesktopPlaybackShortcut
 import com.maxrave.simpmusic.ui.theme.LocalAppFontFamily
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import com.maxrave.simpmusic.viewModel.UIEvent
 import org.jetbrains.compose.resources.painterResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.circle_app_icon
@@ -44,7 +42,7 @@ import java.util.prefs.Preferences
  * - Shares player state with main window
  * - Close-safe (doesn't close main app)
  * - Remembers window position
- * - Keyboard shortcuts (Space: play/pause, Arrow keys: prev/next)
+ * - Keyboard shortcuts (Space: play/pause, arrows: seek, Ctrl+arrows: prev/next)
  */
 @Composable
 fun MiniPlayerWindow(
@@ -103,28 +101,20 @@ fun MiniPlayerWindow(
         resizable = true,
         state = windowState,
         onKeyEvent = { keyEvent ->
-            when {
-                keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Spacebar -> {
-                    sharedViewModel.onUIEvent(UIEvent.PlayPause)
-                    true
-                }
-
-                keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionRight -> {
-                    sharedViewModel.onUIEvent(UIEvent.Next)
-                    true
-                }
-
-                keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft -> {
-                    sharedViewModel.onUIEvent(UIEvent.Previous)
-                    true
-                }
-
-                else -> {
-                    false
-                }
-            }
+            dispatchDesktopPlaybackShortcut(keyEvent, sharedViewModel)
         },
     ) {
+        DisposableEffect(window, sharedViewModel) {
+            val windowHotkeys =
+                DesktopWindowPlaybackHotkeys.install(
+                    window = window,
+                    sharedViewModel = sharedViewModel,
+                )
+            onDispose {
+                windowHotkeys.close()
+            }
+        }
+
         val baseDensity = LocalDensity.current
         val scaledDensity =
             remember(baseDensity, uiScale) {

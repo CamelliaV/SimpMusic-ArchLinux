@@ -185,14 +185,14 @@ sentry {
                 println("Full build detected, enabling Sentry Auth Token")
                 val properties = Properties()
                 properties.load(rootProject.file("local.properties").inputStream())
-                properties.getProperty("SENTRY_AUTH_TOKEN")
+                properties.getProperty("SENTRY_AUTH_TOKEN")?.takeIf { it.isNotBlank() }
             } catch (e: Exception) {
                 println("Failed to load SENTRY_AUTH_TOKEN from local.properties: ${e.message}")
                 null
             }
         authToken.set(token ?: "")
-        includeProguardMapping.set(true)
-        autoUploadProguardMapping.set(true)
+        includeProguardMapping.set(token != null)
+        autoUploadProguardMapping.set(token != null)
     } else {
         includeProguardMapping.set(false)
         autoUploadProguardMapping.set(false)

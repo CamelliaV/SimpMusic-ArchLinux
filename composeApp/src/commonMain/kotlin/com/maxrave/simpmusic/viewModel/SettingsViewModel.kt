@@ -12,7 +12,6 @@ import com.maxrave.common.SELECTED_LANGUAGE_MANUAL
 import com.maxrave.common.VIDEO_QUALITY
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.GoogleAccountEntity
-import com.maxrave.domain.extension.toNetScapeString
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DesktopFontFamily
 import com.maxrave.domain.manager.DesktopUiScale
@@ -59,6 +58,7 @@ class SettingsViewModel(
     private val songRepository: SongRepository,
     private val accountRepository: AccountRepository,
     private val cacheRepository: CacheRepository,
+    private val youTubeAccountManager: YouTubeAccountManager,
 ) : BaseViewModel() {
     private val databasePath: String? = commonRepository.getDatabasePath()
     private val downloadUtils: DownloadHandler by inject()
@@ -97,6 +97,8 @@ class SettingsViewModel(
     val playerCacheLimit: StateFlow<Int?> = _playerCacheLimit
     private var _playVideoInsteadOfAudio: MutableStateFlow<String?> = MutableStateFlow(null)
     val playVideoInsteadOfAudio: StateFlow<String?> = _playVideoInsteadOfAudio
+    private var _playYouTubeFallbackVideo: MutableStateFlow<String?> = MutableStateFlow(null)
+    val playYouTubeFallbackVideo: StateFlow<String?> = _playYouTubeFallbackVideo
     private var _videoQuality: MutableStateFlow<String?> = MutableStateFlow(null)
     val videoQuality: StateFlow<String?> = _videoQuality
     private var _thumbCacheSize = MutableStateFlow<Long?>(null)
@@ -253,6 +255,7 @@ class SettingsViewModel(
         getLyricsProvider()
         getUseTranslation()
         getPlayVideoInsteadOfAudio()
+        getPlayYouTubeFallbackVideo()
         getVideoQuality()
         getSpotifyLogIn()
         getSpotifyLyrics()
@@ -1034,6 +1037,21 @@ class SettingsViewModel(
         }
     }
 
+    fun getPlayYouTubeFallbackVideo() {
+        viewModelScope.launch {
+            dataStoreManager.playYouTubeFallbackVideo.collect { playYouTubeFallbackVideo ->
+                _playYouTubeFallbackVideo.emit(playYouTubeFallbackVideo)
+            }
+        }
+    }
+
+    fun setPlayYouTubeFallbackVideo(playYouTubeFallbackVideo: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setPlayYouTubeFallbackVideo(playYouTubeFallbackVideo)
+            getPlayYouTubeFallbackVideo()
+        }
+    }
+
     fun getSponsorBlockCategories() {
         viewModelScope.launch {
             dataStoreManager.getSponsorBlockCategories().let {
@@ -1280,7 +1298,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             _googleAccounts.emit(LocalResource.Loading())
             accountRepository.getGoogleAccounts().collectLatest { accounts ->
-                Logger.w("getAllGoogleAccount", "getAllGoogleAccount: $accounts")
+                Logger.w("getAllGoogleAccount", "getAllGoogleAccount: ${accounts.safeGoogleAccountSummary()}")
                 if (!accounts.isNullOrEmpty()) {
                     _googleAccounts.emit(LocalResource.Success(accounts))
                 } else {
@@ -1289,7 +1307,7 @@ class SettingsViewModel(
                             .getAccountInfo(
                                 dataStoreManager.cookie.first(),
                             ).collect {
-                                Logger.w("getAllGoogleAccount", "getAllGoogleAccount: $it")
+                                Logger.w("getAllGoogleAccount", "getAllGoogleAccount: accountInfoCount=${it.size}")
                                 if (it.isNotEmpty()) {
                                     dataStoreManager.putString("AccountName", it.first().name)
                                     dataStoreManager.putString(
@@ -1317,7 +1335,7 @@ class SettingsViewModel(
                                             ),
                                         ).singleOrNull()
                                         ?.let { account ->
-                                            Logger.w("getAllGoogleAccount", "inserted: $account")
+                                            Logger.w("getAllGoogleAccount", "inserted account result=$account")
                                         }
                                     getAllGoogleAccount()
                                 } else {
@@ -1336,101 +1354,32 @@ class SettingsViewModel(
         cookie: String,
         netscapeCookie: String? = null,
     ): Boolean {
-        val currentCookie = dataStoreManager.cookie.first()
-        val currentPageId = dataStoreManager.pageId.first()
-        val currentLoggedIn = dataStoreManager.loggedIn.first() == DataStoreManager.TRUE
-        try {
-            runBlocking {
-                dataStoreManager.setCookie(cookie, "")
-                dataStoreManager.setLoggedIn(true)
-            }
-            return accountRepository
-                .getAccountInfo(
-                    cookie,
-                ).lastOrNull()
-                ?.takeIf {
-                    it.isNotEmpty()
-                }?.let { accountInfoList ->
-                    Logger.d("getAllGoogleAccount", "addAccount: $accountInfoList")
-                    accountRepository.getGoogleAccounts().lastOrNull()?.forEach {
-                        Logger.d("getAllGoogleAccount", "set used: $it start")
-                        accountRepository
-                            .updateGoogleAccountUsed(it.email, false)
-                            .singleOrNull()
-                            ?.let {
-                                Logger.w("getAllGoogleAccount", "set used: $it")
-                            }
-                    }
-                    dataStoreManager.putString("AccountName", accountInfoList.first().name)
-                    dataStoreManager.putString(
-                        "AccountThumbUrl",
-                        accountInfoList
-                            .first()
-                            .thumbnails
-                            .lastOrNull()
-                            ?.url ?: "",
-                    )
-                    val cookieItem =
-                        netscapeCookie ?: commonRepository
-                            .getCookiesFromInternalDatabase(Config.YOUTUBE_MUSIC_MAIN_URL, getPackageName())
-                            .toNetScapeString()
-                    commonRepository.writeTextToFile(cookieItem, (getFileDir() + "/ytdlp-cookie.txt")).let {
-                        Logger.d("getAllGoogleAccount", "addAccount: write cookie file: $it")
-                    }
-                    accountInfoList.forEachIndexed { index, account ->
-                        accountRepository
-                            .insertGoogleAccount(
-                                GoogleAccountEntity(
-                                    email = account.email,
-                                    name = account.name,
-                                    thumbnailUrl =
-                                        account
-                                            .thumbnails
-                                            .lastOrNull()
-                                            ?.url ?: "",
-                                    cache = cookie,
-                                    isUsed = index == 0,
-                                    netscapeCookie = cookieItem,
-                                    pageId = account.pageId,
-                                ),
-                            ).firstOrNull()
-                            ?.let {
-                                log("addAccount: $it", LogLevel.WARN)
-                            }
-                    }
-                    dataStoreManager.setLoggedIn(true)
-                    dataStoreManager.setCookie(cookie, accountInfoList.first().pageId)
-                    getAllGoogleAccount()
-                    getLoggedIn()
-                    true
-                } ?: run {
-                Logger.w("getAllGoogleAccount", "addAccount: Account info is null")
-                runBlocking {
-                    dataStoreManager.setCookie(currentCookie, currentPageId)
-                    dataStoreManager.setLoggedIn(currentLoggedIn)
-                }
-                false
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Logger.e("getAllGoogleAccount", "addAccount: ${e.message}")
-            runBlocking {
-                dataStoreManager.setCookie(currentCookie, currentPageId)
-                dataStoreManager.setLoggedIn(currentLoggedIn)
-            }
-            return false
+        val success = youTubeAccountManager.addAccount(cookie, netscapeCookie)
+        if (success) {
+            getAllGoogleAccount()
+            getLoggedIn()
         }
+        return success
+    }
+
+    suspend fun importBrowserCookiesAndAddAccount(): BrowserCookieAccountImportResult {
+        val result = youTubeAccountManager.importBrowserCookiesAndAddAccount()
+        if (result is BrowserCookieAccountImportResult.Success) {
+            getAllGoogleAccount()
+            getLoggedIn()
+        }
+        return result
     }
 
     fun setUsedAccount(acc: GoogleAccountEntity?) {
         viewModelScope.launch {
             if (acc != null) {
-                googleAccounts.value.data?.forEach {
+                googleAccounts.value.data?.forEach { account ->
                     accountRepository
-                        .updateGoogleAccountUsed(it.email, false)
+                        .updateGoogleAccountUsed(account.email, false)
                         .singleOrNull()
-                        ?.let {
-                            Logger.w("getAllGoogleAccount", "set used: $it")
+                        ?.let { updatedRows ->
+                            Logger.w("getAllGoogleAccount", "set used email=${account.email} updatedRows=$updatedRows")
                         }
                 }
                 dataStoreManager.putString("AccountName", acc.name)
@@ -1439,7 +1388,7 @@ class SettingsViewModel(
                     .updateGoogleAccountUsed(acc.email, true)
                     .singleOrNull()
                     ?.let {
-                        Logger.w("getAllGoogleAccount", "set used: $it")
+                        Logger.w("getAllGoogleAccount", "set used email=${acc.email} updatedRows=$it")
                     }
                 acc.netscapeCookie?.let { commonRepository.writeTextToFile(it, (getFileDir() + "/ytdlp-cookie.txt")) }.let {
                     Logger.d("getAllGoogleAccount", "addAccount: write cookie file: $it")
@@ -1450,12 +1399,12 @@ class SettingsViewModel(
                 getAllGoogleAccount()
                 getLoggedIn()
             } else {
-                googleAccounts.value.data?.forEach {
+                googleAccounts.value.data?.forEach { account ->
                     accountRepository
-                        .updateGoogleAccountUsed(it.email, false)
+                        .updateGoogleAccountUsed(account.email, false)
                         .singleOrNull()
-                        ?.let {
-                            Logger.w("getAllGoogleAccount", "set used: $it")
+                        ?.let { updatedRows ->
+                            Logger.w("getAllGoogleAccount", "set used email=${account.email} updatedRows=$updatedRows")
                         }
                 }
                 dataStoreManager.putString("AccountName", "")
@@ -1610,6 +1559,19 @@ class SettingsViewModel(
         }
     }
 }
+
+private fun List<GoogleAccountEntity>?.safeGoogleAccountSummary(): String =
+    if (isNullOrEmpty()) {
+        "count=0"
+    } else {
+        joinToString(prefix = "count=$size [", postfix = "]") { account ->
+            "email=${account.email}, " +
+                "isUsed=${account.isUsed}, " +
+                "pageIdPresent=${!account.pageId.isNullOrBlank()}, " +
+                "cookiePresent=${!account.cache.isNullOrBlank()}, " +
+                "netscapeCookiePresent=${!account.netscapeCookie.isNullOrBlank()}"
+        }
+    }
 
 data class SettingsStorageSectionFraction(
     val otherApp: Float = 0f,

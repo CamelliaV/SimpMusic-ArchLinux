@@ -185,6 +185,8 @@ kotlin {
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.sentry.jvm)
             implementation(libs.native.tray)
+            implementation(libs.jna)
+            implementation(libs.jna.platform)
             implementation(libs.androidx.sqlite.bundled)
             implementation(projects.mediaJvmUi)
             listOf("base", "graphics", "controls", "media", "web", "swing").forEach { module ->

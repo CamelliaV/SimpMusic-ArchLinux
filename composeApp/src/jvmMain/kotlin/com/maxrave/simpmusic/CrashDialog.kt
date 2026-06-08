@@ -9,6 +9,7 @@ import java.awt.FlowLayout
 import java.awt.Font
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
+import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 import javax.swing.BorderFactory
@@ -63,6 +64,10 @@ object CrashDialog {
         }
 
         val stackTrace = StringWriter().also { throwable.printStackTrace(PrintWriter(it)) }.toString()
+        runCatching {
+            File("/tmp/simpmusic-crash.log").writeText(stackTrace)
+            System.err.println(stackTrace)
+        }
         val versionInfo = try {
             "SimpMusic Desktop v${VersionManager.getVersionName()}"
         } catch (_: Exception) {

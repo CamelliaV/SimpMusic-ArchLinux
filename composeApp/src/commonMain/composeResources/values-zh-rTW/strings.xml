@@ -285,6 +285,8 @@
     <string name="audio_quality">音訊品質</string>
     <string name="play_video_for_video_track_instead_of_audio_only">播放影片而不是僅播放音訊</string>
     <string name="such_as_music_video_lyrics_video_podcasts_and_more">例如音樂影片、歌詞影片、Podcast等等</string>
+    <string name="play_video_for_youtube_fallback_tracks">為 YouTube 影片音樂播放影片</string>
+    <string name="play_video_for_youtube_fallback_tracks_description">適用於作為音樂播放的 YouTube 影片和回退項目，畫質使用影片畫質設定。</string>
     <string name="video_quality">影片畫質</string>
     <plurals name="n_song">
         <item quantity="other">%d 首歌曲</item>

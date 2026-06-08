@@ -3,6 +3,7 @@ package com.maxrave.simpmusic.expect
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteStatement
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import com.maxrave.logger.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.charset.StandardCharsets
@@ -24,6 +25,9 @@ actual fun canImportYouTubeCookiesFromBrowser(): Boolean =
     System.getProperty("os.name", "").contains("Linux", ignoreCase = true)
 
 actual suspend fun importYouTubeCookiesFromBrowser(): ImportedYouTubeCookies =
+    importYouTubeCookieCandidatesFromBrowser().first()
+
+actual suspend fun importYouTubeCookieCandidatesFromBrowser(): List<ImportedYouTubeCookies> =
     withContext(Dispatchers.IO) {
         if (!canImportYouTubeCookiesFromBrowser()) {
             throw BrowserCookieImportException("Browser cookie import is currently available on Linux desktop only.")
@@ -35,18 +39,21 @@ actual suspend fun importYouTubeCookiesFromBrowser(): ImportedYouTubeCookies =
         }
 
         val errors = mutableListOf<String>()
-        for (candidate in candidates) {
-            val result =
+        val recordSets =
+            candidates.mapNotNull { candidate ->
                 runCatching {
-                    buildImportedYouTubeCookies(
-                        records = readChromiumCookieRecords(candidate),
+                    BrowserCookieRecordSet(
                         sourceDescription = candidate.sourceDescription,
+                        records = readChromiumCookieRecords(candidate),
                     )
+                }.getOrElse { error ->
+                    errors += "${candidate.sourceDescription}: ${error.message ?: "read failed"}"
+                    null
                 }
-            result.getOrNull()?.let { return@withContext it }
-            result.exceptionOrNull()?.message?.let { error ->
-                errors += "${candidate.sourceDescription}: $error"
             }
+        val imported = buildImportedYouTubeCookieCandidates(recordSets)
+        if (imported.isNotEmpty()) {
+            return@withContext imported
         }
 
         throw BrowserCookieImportException(
@@ -68,6 +75,21 @@ internal data class BrowserCookieRecord(
     val path: String,
 )
 
+internal data class BrowserCookieRecordSet(
+    val sourceDescription: String,
+    val records: List<BrowserCookieRecord>,
+)
+
+internal fun buildImportedYouTubeCookieCandidates(recordSets: List<BrowserCookieRecordSet>): List<ImportedYouTubeCookies> =
+    recordSets.mapNotNull { recordSet ->
+        runCatching {
+            buildImportedYouTubeCookies(
+                records = recordSet.records,
+                sourceDescription = recordSet.sourceDescription,
+            )
+        }.getOrNull()
+    }
+
 internal fun buildImportedYouTubeCookies(
     records: List<BrowserCookieRecord>,
     sourceDescription: String,
@@ -81,13 +103,19 @@ internal fun buildImportedYouTubeCookies(
         relevantRecords.filter {
             domainMatches("music.youtube.com", it.domain) && pathMatches("/", it.path)
         }
+    val youtubeRecords =
+        relevantRecords.filter {
+            domainMatches("www.youtube.com", it.domain) && pathMatches("/", it.path)
+        }
 
     val cookieHeader = headerRecords.joinToString("; ") { "${it.name}=${it.value}" }
-    if (cookieHeader.isBlank() ||
-        ("SAPISID=" !in cookieHeader && "__Secure-3PAPISID=" !in cookieHeader)
-    ) {
-        throw BrowserCookieImportException("No authenticated YouTube Music cookie was found.")
+    if (cookieHeader.isBlank() || !youtubeRecords.hasYtDlpAuthenticatedYouTubeCookies()) {
+        throw BrowserCookieImportException("No authenticated YouTube browser cookie was found.")
     }
+    Logger.d(
+        "BrowserCookieImporter",
+        "Built YouTube cookie candidate source=$sourceDescription headerNames=${headerRecords.map { it.name }.distinct().sorted()} youtubeAuthNames=${youtubeRecords.map { it.name }.filter { it in YOUTUBE_AUTH_COOKIE_NAMES }.distinct().sorted()} relevantDomainCounts=${relevantRecords.groupingBy { it.domain }.eachCount()}",
+    )
 
     return ImportedYouTubeCookies(
         cookieHeader = cookieHeader,
@@ -95,6 +123,15 @@ internal fun buildImportedYouTubeCookies(
         sourceDescription = sourceDescription,
         cookieCount = relevantRecords.size,
     )
+}
+
+private val YOUTUBE_AUTH_COOKIE_NAMES =
+    setOf("LOGIN_INFO", "SAPISID", "__Secure-1PAPISID", "__Secure-3PAPISID")
+
+private fun List<BrowserCookieRecord>.hasYtDlpAuthenticatedYouTubeCookies(): Boolean {
+    val names = map { it.name }.toSet()
+    return "LOGIN_INFO" in names &&
+        ("SAPISID" in names || "__Secure-1PAPISID" in names || "__Secure-3PAPISID" in names)
 }
 
 internal fun deriveChromiumLinuxKey(password: ByteArray): ByteArray {

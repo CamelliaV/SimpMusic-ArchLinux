@@ -73,6 +73,7 @@ import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistVideosDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.md_theme_dark_background
@@ -525,11 +526,12 @@ fun ArtistScreen(
                                     )
                                     TextButton(
                                         onClick = {
-                                            val videoListParam = state.data.video?.videoListParam
-                                            if (videoListParam != null) {
+                                            val videoListEndpoint = state.data.video?.videoListEndpoint
+                                            if (videoListEndpoint != null) {
                                                 navController.navigate(
-                                                    PlaylistDestination(
-                                                        videoListParam,
+                                                    ArtistVideosDestination(
+                                                        browseId = videoListEndpoint.browseId,
+                                                        params = videoListEndpoint.params,
                                                     ),
                                                 )
                                             } else {

@@ -3,6 +3,7 @@ package com.maxrave.simpmusic.di
 import com.maxrave.simpmusic.viewModel.AlbumViewModel
 import com.maxrave.simpmusic.viewModel.AnalyticsViewModel
 import com.maxrave.simpmusic.viewModel.ArtistViewModel
+import com.maxrave.simpmusic.viewModel.ArtistVideosViewModel
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.LibraryDynamicPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
@@ -18,11 +19,19 @@ import com.maxrave.simpmusic.viewModel.RecentlySongsViewModel
 import com.maxrave.simpmusic.viewModel.SearchViewModel
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
+import com.maxrave.simpmusic.viewModel.YouTubeAccountManager
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val viewModelModule =
     module {
+        single {
+            YouTubeAccountManager(
+                get(),
+                get(),
+                get(),
+            )
+        }
         single {
             SharedViewModel(
                 get(),
@@ -77,10 +86,12 @@ val viewModelModule =
             HomeViewModel(
                 get(),
                 get(),
+                get(),
             )
         }
         viewModel {
             SettingsViewModel(
+                get(),
                 get(),
                 get(),
                 get(),
@@ -91,6 +102,11 @@ val viewModelModule =
         viewModel {
             ArtistViewModel(
                 get(),
+                get(),
+            )
+        }
+        viewModel {
+            ArtistVideosViewModel(
                 get(),
             )
         }
