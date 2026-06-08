@@ -16,7 +16,7 @@ pkgver=${version}
 pkgrel=1
 pkgdesc="SimpMusic CamelliaV fork with YouTube video-as-music fallback"
 arch=('x86_64')
-url="https://github.com/CamelliaV/SimpMusic"
+url="https://github.com/CamelliaV/SimpMusic-ArchLinux"
 license=('GPL-3.0-or-later')
 depends=(
   'bash'
@@ -41,7 +41,7 @@ optdepends=(
 )
 provides=('simpmusic')
 conflicts=('simpmusic')
-source=("${asset_name}::https://github.com/CamelliaV/SimpMusic/releases/download/${release_tag}/${asset_name}")
+source=("${asset_name}::https://github.com/CamelliaV/SimpMusic-ArchLinux/releases/download/${release_tag}/${asset_name}")
 sha256sums=('${sha256}')
 
 EOF

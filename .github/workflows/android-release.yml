@@ -481,7 +481,7 @@ jobs:
           \`\`\`bash
           mkdir simpmusic-camelliav
           cd simpmusic-camelliav
-          curl -LO https://github.com/CamelliaV/SimpMusic/releases/download/${TAG}/PKGBUILD
+          curl -LO https://github.com/CamelliaV/SimpMusic-ArchLinux/releases/download/${TAG}/PKGBUILD
           makepkg -si
           \`\`\`
           EOF
