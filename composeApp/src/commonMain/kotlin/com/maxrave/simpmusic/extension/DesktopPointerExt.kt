@@ -12,7 +12,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -151,7 +150,7 @@ private fun Modifier.desktopMiddleMouseHorizontalDrag(
 @OptIn(ExperimentalComposeUiApi::class)
 private fun PointerEvent.isMiddleMouseEvent(): Boolean =
     shouldStartMiddleMouseHorizontalDrag(
-        isComposeMiddleMouseEvent = button == PointerButton.Tertiary || buttons.isTertiaryPressed,
+        isComposeMiddleMouseEvent = buttons.isTertiaryPressed,
         isNativeMiddleMouseEvent = isNativeMiddleMouseEvent(),
     )
 
@@ -164,6 +163,9 @@ internal fun shouldCaptureMiddleMouseHorizontalDragEvent(isMiddleMouseEvent: Boo
 
 @OptIn(ExperimentalComposeUiApi::class)
 internal expect fun PointerEvent.isNativeMiddleMouseEvent(): Boolean
+
+@OptIn(ExperimentalComposeUiApi::class)
+internal expect fun PointerEvent.isPrimaryButtonEvent(): Boolean
 
 internal fun middleMouseHorizontalDragDelta(
     isDragging: Boolean,
@@ -192,7 +194,7 @@ fun Modifier.dismissOnPrimaryClickAway(
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 if (event.type == PointerEventType.Press) {
                     startPosition = event.changes.firstOrNull()?.position
-                    isPrimaryButton = event.button == PointerButton.Primary
+                    isPrimaryButton = event.isPrimaryButtonEvent()
                 }
             }
 
